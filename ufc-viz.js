@@ -4,7 +4,7 @@ var weightClasses = ["Atomweight", "Strawweight", "Flyweight",
 					 "Welterweight", "Middleweight", "Light Heavyweight",
 					 "Heavyweight", "Super Heavyweight"];
 
-var MIN_FIGHT_COUNT = 15;
+var MIN_FIGHT_COUNT = 12;
 
 d3.csv("fighters.csv", function(data) {
 	for(var i = 0; i < data.length; i++) {
@@ -121,9 +121,6 @@ d3.csv("fighters.csv", function(data) {
 
 						linkedOpponents.push(fight.opponentId);
 					}
-					else {
-						console.log("Duplicate avoided");
-					}
 				}
 			}
 		}
@@ -172,8 +169,8 @@ d3.csv("fighters.csv", function(data) {
 				return color(weightClasses.indexOf(d.wClass));
 			})
 
-		node.append("text")
-			.text(function(d) { return d.name });
+		// node.append("text")
+		// 	.text(function(d) { return d.name });
 
 		simulation
 			.nodes(nodes)
