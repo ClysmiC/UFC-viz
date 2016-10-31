@@ -91,52 +91,35 @@ d3.csv("fighters.csv", function(data) {
 		console.log("Removed " + removeList.length + " fighters for having < " + MIN_FIGHT_COUNT + " fights ... " + Object.keys(fighters).length + " fighters remain.");
 
 		// Create list of all the links
-		var links_ = [];
+		var links = [];
 		
 		for(var id in fighters) {
 			var fighter = fighters[id];
 
-			// Keep a list of who we've already linked
-			// so duplicate fights won't create a second link
-			linkedOpponents = [];
-
 			for(var i = 0; i < fighter.fightList.length; i++) {
 				var fight = fighter.fightList[i];
 
-				if(!(fight.opponentId in fighters)) {
-					continue;
-				}
-				
-				// only create link if your name comes first alphabetically,
-				// so we don't create duplicate links
-				if(id < fight.opponentId) {
-					if(linkedOpponents.indexOf(fight.opponentId) == -1) {
-						links_.push(
-							{
-								source: id,
-								target: fight.opponentId,
-								value: 1
-							}
-						)
-
-						linkedOpponents.push(fight.opponentId);
-					}
-					else {
-						console.log("Duplicate avoided");
-					}
+				// only create link when examining the win
+				// so we don't create each link twice
+				if(fight.result == "win") {
+					links.push(
+						{
+							source: id,
+							target: fight.opponentId
+						}
+					)
 				}
 			}
 		}
 
 		// Create a list of all the fighters (map our dict into a list)
-		var nodes_ = [];
+		var nodes = [];
 		for(var id in fighters) {
-			nodes_.push(fighters[id]);
+			nodes.push(fighters[id]);
 		}
 		
 		//
 		// Now, construct the network!
-		
 		var width = 960,
 			height = 800
 
@@ -147,59 +130,54 @@ d3.csv("fighters.csv", function(data) {
 		var color = d3.scaleOrdinal(d3.schemeCategory20);
 
 		var simulation = d3.forceSimulation()
-			.force("link", d3.forceLink().id(function(d) {
-				return d.id;
-			}))
+			.force("link", d3.forceLink().id(function(d) { return d.id; }))
 			.force("charge", d3.forceManyBody())
 			.force("center", d3.forceCenter(width / 2, height / 2));
 
-		d3.json("graphFile.json", function(error, graph) {
-			graph = { links: links_, nodes: nodes_ };
-			
-			var link = svg.append("g")
-				.attr("class", "links")
-				.selectAll("line")
-				.data(graph.links)
-				.enter().append("line")
-				.attr("stroke-width", function(d) { return 2; });
 
-			var node = svg.append("g")
-				.attr("class", "nodes")
-				.selectAll("nodes")
-				.data(graph.nodes)
-				.enter().append("g");
+		var link = svg.append("g")
+			.attr("class", "links")
+			.selectAll("line")
+			.data(links)
+			.enter().append("line")
+			.attr("stroke-width", function(d) { return 2; });
 
-			node.append("circle")
-				.attr("r", 5)
-				.attr("fill", function(d) {
-					return color(0);
-				})
+		var node = svg.append("g")
+			.attr("class", "nodes")
+			.selectAll("nodes")
+			.data(nodes)
+			.enter().append("g");
 
-			// node.append("text")
-			// 	.text(function(d) { return d.id });
+		node.append("circle")
+			.attr("r", 5)
+			.attr("fill", function(d) {
+				return color(0);
+			})
 
-			simulation
-				.nodes(graph.nodes)
-				.on("tick", ticked);
+		node.append("text")
+			.text(function(d) { return d.name });
 
-			simulation.force("link")
-				.links(graph.links);
+		simulation
+			.nodes(nodes)
+			.on("tick", ticked);
 
-			function ticked() {
-				link
-					.attr("x1", function(d) { return d.source.x; })
-					.attr("y1", function(d) { return d.source.y; })
-					.attr("x2", function(d) { return d.target.x; })
-					.attr("y2", function(d) { return d.target.y; });
+		simulation.force("link")
+			.links(links);
 
-				node.selectAll("circle")
-					.attr("cx", function(d) { return d.x; })
-					.attr("cy", function(d) { return d.y; });
+		function ticked() {
+			link
+				.attr("x1", function(d) { return d.source.x; })
+				.attr("y1", function(d) { return d.source.y; })
+				.attr("x2", function(d) { return d.target.x; })
+				.attr("y2", function(d) { return d.target.y; });
 
-				// node.selectAll("text")
-				// 	.attr("x", function(d) { return d.x; })
-				// 	.attr("y", function(d) { return d.y; });	  
-			}
-		});
+			node.selectAll("circle")
+				.attr("cx", function(d) { return d.x; })
+				.attr("cy", function(d) { return d.y; });
+
+			node.selectAll("text")
+				.attr("x", function(d) { return d.x; })
+				.attr("y", function(d) { return d.y; });	  
+		}
 	});
 });
