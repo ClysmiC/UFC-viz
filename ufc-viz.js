@@ -4,7 +4,7 @@ var weightClasses = ["Atomweight", "Strawweight", "Flyweight",
 					 "Welterweight", "Middleweight", "Light Heavyweight",
 					 "Heavyweight", "Super Heavyweight"];
 
-var MIN_FIGHT_COUNT = 8;
+var MIN_FIGHT_COUNT = 10;
 
 d3.csv("fighters.csv", function(data) {
 	for(var i = 0; i < data.length; i++) {
@@ -109,13 +109,15 @@ d3.csv("fighters.csv", function(data) {
 
 		// Create list of all the links
 		var links = [];
+		var maxHead2HeadCount = 1;
 		
 		for(var id in fighters) {
 			var fighter = fighters[id];
 
 			// Keep a list of who we've already linked
 			// so duplicate fights won't create a second link
-			linkedOpponents = [];
+			myLinkedOpponents = [];
+			myLinks = [];
 
 			for(var i = 0; i < fighter.fightList.length; i++) {
 				var fight = fighter.fightList[i];
@@ -127,16 +129,23 @@ d3.csv("fighters.csv", function(data) {
 				// only create link if your name comes first alphabetically,
 				// so we don't create duplicate links
 				if(id < fight.opponentId) {
-					if(linkedOpponents.indexOf(fight.opponentId) == -1) {
-						links.push(
-							{
+					var index = myLinkedOpponents.indexOf(fight.opponentId);
+					if(index === -1) {
+						var newLink = {
 								source: id,
 								target: fight.opponentId,
-								value: 1
-							}
-						)
+								count: 1
+						};
+						
+						links.push(newLink);
 
-						linkedOpponents.push(fight.opponentId);
+						// myLinkedOpponents and myLinks must have parallel indices
+						myLinkedOpponents.push(fight.opponentId);
+						myLinks.push(newLink);
+					}
+					else {
+						myLinks[index].count += 1;
+						maxHead2HeadCount = Math.max(maxHead2HeadCount, myLinks[index].count);
 					}
 				}
 			}
@@ -151,8 +160,8 @@ d3.csv("fighters.csv", function(data) {
 		//
 		// Now, construct the network!
 		
-		var width = window.innerWidth
-		var height = window.innerHeight;
+		var width = window.innerWidth - 50
+		var height = window.innerHeight - 50;
 
 		var svg = d3.select("body").append("svg")
 			.attr("width", width)
@@ -176,7 +185,7 @@ d3.csv("fighters.csv", function(data) {
 					   
 					   dist += weightClassDifference;
 
-					   dist *= 60;
+					   dist *= 100;
 					   
 					   return dist;
 				   })
@@ -203,7 +212,13 @@ d3.csv("fighters.csv", function(data) {
 			.selectAll("line")
 			.data(links)
 			.enter().append("line")
-			.attr("stroke-width", function(d) { return 2; });
+			.attr("stroke-width", function(d) {
+				return 2;
+			})
+			.attr("opacity", function(d) {
+				var result = .1 + .9 * (d.count / maxHead2HeadCount);
+				return result;
+			});
 
 		var node = svg.append("g")
 			.attr("class", "nodes")
@@ -213,7 +228,7 @@ d3.csv("fighters.csv", function(data) {
 
 		node.append("circle")
 			.attr("r", function(d) {
-				return 2 + 8 * d.winPercent;
+				return 3 + 8 * d.winPercent;
 			})
 			.attr("fill", function(d) {
 				return color(weightClasses.indexOf(d.wClass));
