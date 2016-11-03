@@ -4,7 +4,7 @@ var weightClasses = ["Atomweight", "Strawweight", "Flyweight",
 					 "Welterweight", "Middleweight", "Light Heavyweight",
 					 "Heavyweight", "Super Heavyweight"];
 
-var MIN_FIGHT_COUNT = 12;
+var MIN_FIGHT_COUNT = 8;
 
 d3.csv("fighters.csv", function(data) {
 	for(var i = 0; i < data.length; i++) {
@@ -90,6 +90,23 @@ d3.csv("fighters.csv", function(data) {
 
 		console.log("Removed " + removeList.length + " fighters for having < " + MIN_FIGHT_COUNT + " fights ... " + Object.keys(fighters).length + " fighters remain.");
 
+		// Cache win % for each fighter
+		for(var id in fighters) {
+			var fighter = fighters[id];
+			var winCount = 0;
+			
+
+			for(var i = 0; i < fighter.fightList.length; i++) {
+				var fight = fighter.fightList[i];
+
+				if(fight.result === "win") {
+					winCount += 1;
+				}
+			}
+
+			fighter.winPercent = winCount / fighter.fightList.length;
+		}
+
 		// Create list of all the links
 		var links = [];
 		
@@ -134,8 +151,8 @@ d3.csv("fighters.csv", function(data) {
 		//
 		// Now, construct the network!
 		
-		var width = 960,
-			height = 800
+		var width = 2000,
+			height = 2000
 
 		var svg = d3.select("body").append("svg")
 			.attr("width", width)
@@ -164,7 +181,9 @@ d3.csv("fighters.csv", function(data) {
 			.enter().append("g");
 
 		node.append("circle")
-			.attr("r", 5)
+			.attr("r", function(d) {
+				return 2 + 8 * d.winPercent;
+			})
 			.attr("fill", function(d) {
 				return color(weightClasses.indexOf(d.wClass));
 			})
