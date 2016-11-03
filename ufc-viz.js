@@ -151,8 +151,8 @@ d3.csv("fighters.csv", function(data) {
 		//
 		// Now, construct the network!
 		
-		var width = 2000,
-			height = 2000
+		var width = window.innerWidth
+		var height = window.innerHeight;
 
 		var svg = d3.select("body").append("svg")
 			.attr("width", width)
@@ -161,11 +161,42 @@ d3.csv("fighters.csv", function(data) {
 		var color = d3.scaleOrdinal(d3.schemeCategory20);
 
 		var simulation = d3.forceSimulation()
-			.force("link", d3.forceLink().id(function(d) {
-				return d.id;
-			}))
-			.force("charge", d3.forceManyBody())
-			.force("center", d3.forceCenter(width / 2, height / 2));
+			.nodes(nodes)
+			.on("tick", ticked)
+			.force("link",
+				   d3.forceLink()
+				   .links(links)
+				   .id(function(d) {
+					   return d.id;
+				   })
+				   .distance(function(d) {
+					   var dist = 1;
+					   var weightClassDifference = Math.abs(
+						   weightClasses.indexOf(d.source.wClass) - weightClasses.indexOf(d.target.wClass));
+					   
+					   dist += weightClassDifference;
+
+					   dist *= 60;
+					   
+					   return dist;
+				   })
+				   .strength(function(d) {
+					   var str = 1;
+					   var weightClassDifference = Math.abs(
+						   weightClasses.indexOf(d.source.wClass) - weightClasses.indexOf(d.target.wClass));
+					   
+					   str += weightClassDifference;
+
+					   str *= .5;
+					   
+					   return str;
+				   })
+				  )
+			.force("charge", d3.forceManyBody()
+				   .distanceMax(300))
+			.force("center", d3.forceCenter()
+				   .x(width/2)
+				   .y(height/2))
 
 		var link = svg.append("g")
 			.attr("class", "links")
@@ -190,13 +221,6 @@ d3.csv("fighters.csv", function(data) {
 
 		// node.append("text")
 		// 	.text(function(d) { return d.name });
-
-		simulation
-			.nodes(nodes)
-			.on("tick", ticked);
-
-		simulation.force("link")
-			.links(links);
 
 		function ticked() {
 			link
