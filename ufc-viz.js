@@ -7,6 +7,7 @@ var weightClasses = ["Atomweight", "Strawweight", "Flyweight",
 var MIN_FIGHT_COUNT = 10;
 
 d3.csv("fighters.csv", function(data) {
+	// Load all fighter data into memory
 	for(var i = 0; i < data.length; i++) {
 		var id = data[i]["fid"];
 		var name = data[i]["name"];
@@ -73,22 +74,46 @@ d3.csv("fighters.csv", function(data) {
 
 		// Now that fight data is loaded into memory, remove any fighters
 		// that have < MIN_FIGHT_COUNT
-		var removeList = [];
-		
-		for(var id in fighters) {
-			var fighter = fighters[id];
+		{
+			var removeList = [];
+			
+			for(var id in fighters) {
+				var fighter = fighters[id];
 
-			if(fighter.fightList.length < MIN_FIGHT_COUNT) {
-				removeList.push(id);
+				if(fighter.fightList.length < MIN_FIGHT_COUNT) {
+					removeList.push(id);
+				}
+			}
+
+			for(var i = 0; i < removeList.length; i++) {
+				var removeId = removeList[i];
+				delete fighters[removeId];
+			}
+
+			console.log("Removed " + removeList.length + " fighters for having < " + MIN_FIGHT_COUNT + " fights ... " + Object.keys(fighters).length + " fighters remain.");
+		}
+
+		// Remove any of the unrepresented weight classes from our master list
+		// so that we don't draw labels, etc. for them
+		{
+			var countPerWeightClass = {};
+			for(var i = 0; i < weightClasses.length; i++) {
+				countPerWeightClass[weightClasses[i]] = 0;
+			}
+			
+			for(var id in fighters) {
+				var fighter = fighters[id];
+				countPerWeightClass[fighter.wClass] += 1;
+			}
+
+			for(var i = 0; i < weightClasses.length; i++) {
+				if(countPerWeightClass[weightClasses[i]] === 0) {
+					console.log("Removed weight class " + weightClasses[i] + " for having 0 fighters in it after filtering.");
+					weightClasses.splice(i, 1); // remove i'th index
+					i--; // decrement i to avoid skipping next element
+				}
 			}
 		}
-
-		for(var i = 0; i < removeList.length; i++) {
-			var removeId = removeList[i];
-			delete fighters[removeId];
-		}
-
-		console.log("Removed " + removeList.length + " fighters for having < " + MIN_FIGHT_COUNT + " fights ... " + Object.keys(fighters).length + " fighters remain.");
 
 		// Cache win % for each fighter
 		for(var id in fighters) {
@@ -173,6 +198,7 @@ d3.csv("fighters.csv", function(data) {
 			.nodes(nodes)
 			.on("tick", ticked)
 			.force("link",
+				   // This force attracts nodes that are connected
 				   d3.forceLink()
 				   .links(links)
 				   .id(function(d) {
@@ -201,11 +227,28 @@ d3.csv("fighters.csv", function(data) {
 					   return str;
 				   })
 				  )
-			.force("charge", d3.forceManyBody()
-				   .distanceMax(300))
-			.force("center", d3.forceCenter()
-				   .x(width/2)
-				   .y(height/2))
+			.force(
+				// This force repels nodes away from each other
+				"charge",
+				d3.forceManyBody()
+					.distanceMax(300)
+			)
+			.force(
+				// This force centers the network as a whole around the center of the screen
+				"center",
+				d3.forceCenter()
+				   .x(width / 2)
+				   .y(height / 2)
+				  )
+			.force(
+				// This force should position the lighter weight clusters to the left and
+				// heavier ones to the right
+				"xPosForce",
+				d3.forceX(function(d) {
+					var index = weightClasses.indexOf(d.wClass);
+					return width / weightClasses.length * index;
+				})
+			);
 
 		var link = svg.append("g")
 			.attr("class", "links")
