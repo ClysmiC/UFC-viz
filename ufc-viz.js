@@ -51,6 +51,9 @@ var MIN_FIGHT_COUNT = 10;
 var width = window.innerWidth - 100
 var height = window.innerHeight - 100;
 
+// space allocated at top of svg exclusively for the labels
+var labelMargin = 100;
+
 // Gets X position for the cluster or label of a given weight class
 // weightClass - class being queried
 // weightClassList - ordered list of weight classes being considered.
@@ -393,6 +396,8 @@ d3.csv("fighters.csv", function(data) {
 				}
 			}
 
+			var percentOfFightersVisible = nodes.length / Object.keys(fighters).length;
+				  
 			d3simulation = d3.forceSimulation()
 				.nodes(nodes)
 				.on("tick", ticked)
@@ -404,13 +409,14 @@ d3.csv("fighters.csv", function(data) {
 						.id(function(d) {
 							return d.id;
 						})
-						.distance(75)
+						.distance(75 + 100 * (1 - percentOfFightersVisible))
 				)
 				.force(
 					// This force repels nodes away from each other
 					"charge",
 					d3.forceManyBody()
 						.distanceMax(300)
+						.strength(-100)
 				)
 				.force(
 					// This force centers the network as a whole around the center of the screen
@@ -450,20 +456,35 @@ d3.csv("fighters.csv", function(data) {
 
 			d3nodes.append("circle")
 				.attr("r", function(d) {
-					return 1 + 10 * d.winPercent;
+					var sparseness = 1 - percentOfFightersVisible;
+					return (1 + 10 * d.winPercent) * (1 + 1 * sparseness);
 				})
 				.attr("fill", function(d) {
 					return color(weightClasses.indexOf(d.wClass));
 				})
 				.on("mouseover", function(fighter) {
 					// fill out tooltip
-
+					htmlString = fighter.name;
+					
+					tooltip.transition()
+						.duration(100)
+						.style("opacity", 1);
+					
+					tooltip.html(htmlString)
+						.style("left", (d3.event.pageX) + "px")
+						.style("top", (d3.event.pageY + 20) + "px");
+					
 					// fade opacity of non-connected fighters
+					// TODO
 				})
 				.on("mouseout", function(fighter) {
 					// hide tooltip
-
+					tooltip.transition()
+						.duration(100)
+						.style("opacity", 0);
+					
 					// restore opacity of non-connected fighters
+					// TODO
 				})
 
 			// d3nodes.append("text")
@@ -471,7 +492,7 @@ d3.csv("fighters.csv", function(data) {
 
 			function ticked() {
 				function clampX(value) { return Math.min(Math.max(value, 50), width - 50); }
-				function clampY(value) { return Math.min(Math.max(value, 100), height - 50); }
+				function clampY(value) { return Math.min(Math.max(value, labelMargin), height - 50); }
 				
 				d3nodes.selectAll("circle")
 					.attr("cx", function(d) { return clampX(d.x); })
@@ -496,14 +517,14 @@ d3.csv("fighters.csv", function(data) {
 					.attr("x", getXForWeightClass(wClass, weightClasses))
 					.attr("y", function() {
 						if(i % 2 === 0) {
-							return 30;
+							return labelMargin / 3;
 						}
 						else {
-							return 80;
+							return 2 * labelMargin / 3;
 						}
 					})
 					.attr("text-anchor", "middle")
-					.attr("font-size", 30)
+					.attr("font-size", labelMargin / 3.5)
 					.attr("fill", (function(closureValue) {
 						return function() {
 							if(selectedWeightClasses[closureValue]) {
