@@ -265,6 +265,10 @@ d3.csv("fighters.csv", function(data) {
 
 		// Generate color scheme
 		var color = d3.scaleOrdinal(d3.schemeCategory20);
+
+		var d3nodes;
+		var d3links;
+		var d3simulation;
 		
 		//
 		// This function completely scratches whatever is currently
@@ -284,22 +288,50 @@ d3.csv("fighters.csv", function(data) {
 		//                 in focus, this param is null
 		//
 		function createInfoViz(wClasses, focusFighter1, focusFighter2) {
-			// Clear whatever is currently on the svg
-			svg.selectAll("*").remove();
 
-			if(wClasses[0]==="foo") {
-				return;
-			}
+			// This is the function that should always be called when reconstructing
+			// the infoviz. createInfoViz should only be called directly the first
+			// time the infoviz gets generated.
+			function regenerateInfoViz(wClasses, focusFighter1, focusFighter2) {											
 
-			// sort the wClasses list ordinally
-			if(wClasses == null) {
-				wClasses = weightClasses;
+				// not 100% how this is working but it is clearing out all
+				// the data that already exists so the graph can rebuild
+				// without any memory leaks
+				if(d3nodes != null) {
+					d3nodes = d3nodes.data([])
+					d3nodes.exit().remove();
+				}
+
+				if(d3links != null) {
+					d3links = d3links.data([])
+					d3links.exit().remove();
+				}
+
+				if(d3simulation != null) {
+					d3simulation.nodes([]);
+
+					d3simulation.force("link")
+						.links([]);
+				}
+
+				d3simulation.restart();
+
+				// sort the wClasses list ordinally
+				if(wClasses == null) {
+					wClasses = weightClasses;
+				}
+				else {
+					wClasses.sort(function(a, b) {
+						return weightClasses.indexOf(a) - weightClasses.indexOf(b);
+					});
+				}
+				
+				// Clear whatever is currently on the svg
+				svg.selectAll("*").remove();
+				
+				createInfoViz(wClasses, focusFighter1, focusFighter2);
 			}
-			else {
-				wClasses.sort(function(a, b) {
-					return weightClasses.indexOf(a) - weightClasses.indexOf(b);
-				});
-			}
+			
 
 			function filter(id) {
 				var fighter = fighters[id];
@@ -331,6 +363,7 @@ d3.csv("fighters.csv", function(data) {
 				}
 			}
 			
+
 			// Build list of nodes and links out of our master lists (fighters and fights)
 			// That meet our filter criteria
 			var nodes = [];
@@ -360,40 +393,19 @@ d3.csv("fighters.csv", function(data) {
 				}
 			}
 
-			var simulation = d3.forceSimulation()
+			d3simulation = d3.forceSimulation()
 				.nodes(nodes)
 				.on("tick", ticked)
-				.force("link",
-					   // This force attracts nodes that are connected
-					   d3.forceLink()
-					   .links(links)
-					   .id(function(d) {
-						   return d.id;
-					   })
-					   .distance(function(d) {
-				   		   var dist = 1;
-				   		   var weightClassDifference = Math.abs(
-				   			   weightClasses.indexOf(d.source.wClass) - weightClasses.indexOf(d.target.wClass));
-						   
-				   		   dist += weightClassDifference;
-
-				   		   dist *= 100;
-
-						   return 100;
-				   		   return dist;
-					   })
-					   .strength(function(d) {
-				   		   var str = 1;
-				   		   var weightClassDifference = Math.abs(
-				   			   weightClasses.indexOf(d.source.wClass) - weightClasses.indexOf(d.target.wClass));
-						   
-				   		   str += weightClassDifference;
-
-				   		   str *= .5;
-						   
-				   		   return str;
-					   })
-					  )
+				.force(
+					"link",
+					// This force attracts nodes that are connected
+					d3.forceLink()
+						.links(links)
+						.id(function(d) {
+							return d.id;
+						})
+						.distance(75)
+				)
 				.force(
 					// This force repels nodes away from each other
 					"charge",
@@ -417,7 +429,7 @@ d3.csv("fighters.csv", function(data) {
 					})
 				);
 
-			var link = svg.append("g")
+			var d3links = svg.append("g")
 				.attr("class", "link")
 				.selectAll("line")
 				.data(links)
@@ -430,13 +442,13 @@ d3.csv("fighters.csv", function(data) {
 					return result;
 				});
 
-			var node = svg.append("g")
+			d3nodes = svg.append("g")
 				.attr("class", "node")
 				.selectAll("nodes")
 				.data(nodes)
 				.enter().append("g");
 
-			node.append("circle")
+			d3nodes.append("circle")
 				.attr("r", function(d) {
 					return 1 + 10 * d.winPercent;
 				})
@@ -444,22 +456,22 @@ d3.csv("fighters.csv", function(data) {
 					return color(weightClasses.indexOf(d.wClass));
 				})
 
-			// node.append("text")
+			// d3nodes.append("text")
 			// 	.text(function(d) { return d.name });
 
 			function ticked() {
 				function clampX(value) { return Math.min(Math.max(value, 50), width - 50); }
 				function clampY(value) { return Math.min(Math.max(value, 100), height - 50); }
 				
-				node.selectAll("circle")
+				d3nodes.selectAll("circle")
 					.attr("cx", function(d) { return clampX(d.x); })
 					.attr("cy", function(d) { return clampY(d.y); });
 
-				// node.selectAll("text")
+				// d3nodes.selectAll("text")
 				// 	.attr("x", function(d) { return d.x; })
 				// 	.attr("y", function(d) { return d.y; });
 
-				link
+				d3links
 					.attr("x1", function(d) { return clampX(d.source.x); })
 					.attr("y1", function(d) { return clampY(d.source.y); })
 					.attr("x2", function(d) { return clampX(d.target.x); })
@@ -515,7 +527,7 @@ d3.csv("fighters.csv", function(data) {
 
 							d3.selectAll(".node circle")
 								.transition()
-								.duration(150)
+								.duration(100)
 								.style("stroke", function(d) {
 									if(d.wClass === closureValue) {
 										return "#000000"; 
@@ -533,7 +545,7 @@ d3.csv("fighters.csv", function(data) {
 
 						d3.selectAll(".node circle")
 							.transition()
-							.duration(150)
+							.duration(100)
 							.style("stroke", "#FFFFFF")
 					})
 					.on("click", (function(closureValue) {
@@ -541,13 +553,13 @@ d3.csv("fighters.csv", function(data) {
 							// toggle
 							selectedWeightClasses[closureValue] = !selectedWeightClasses[closureValue];
 
-							// createInfoViz(["foo"], null, null);
-							createInfoViz(getSelectedWeightClasses(), null, null);
+							regenerateInfoViz(getSelectedWeightClasses(), null, null);
 						}
 					})(wClass));
 			}
 		}
 
 		createInfoViz(getSelectedWeightClasses(), null, null);
+		// createInfoViz(["Lightweight", "Welterweight", "Middleweight"], null, null);
 	});
 });
