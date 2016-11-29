@@ -199,173 +199,209 @@ d3.csv("fighters.csv", function(data) {
 				}
 			}
 		}
-
-		// (Map our fighter dict into a list)
-		var nodes = [];
-		for(var id in fighters) {
-			nodes.push(fighters[id]);
-		}
 		
 		//
-		// Now, construct the network!
+		// This function completely scratches whatever is currently
+		// on the svg and rebuilds the network graphic from scratch
+		//
+		// wClasses - a list of strings describing which weight classes to include.
+		//            null means include all of the weight classes.
+		//
+		// focusFighter1 - the ID of the fighter who is being "focused" on (via
+		//                 clicking on a node), or the ID of the first of two
+		//                 fighters that are being "focused" on (via clicking on
+		//                 a link). If no node or link is in focus, this param
+		//                 is null.
+		//
+		// focusFighter2 - the ID of the second of two fighters that are being
+		//                 "focused" on (via clicking a link). If no link is
+		//                 in focus, this param is null
+		//
+		function createInfoViz(wClasses, focusFighter1, focusFighter2) {
+			// (Map our fighter dict into a list)
+			var nodes = [];
 
-		var svg = d3.select(".chart").append("svg")
-			.attr("width", width)
-			.attr("height", height)
-			.attr("class", "svg");
+			for(var id in fighters) {
+				nodes.push(fighters[id]);
+			}
+			
+			var svg = d3.select(".chart").append("svg")
+				.attr("width", width)
+				.attr("height", height)
+				.attr("class", "svg");
 
-		var color = d3.scaleOrdinal(d3.schemeCategory20);
+			var color = d3.scaleOrdinal(d3.schemeCategory20);
 
-		var simulation = d3.forceSimulation()
-			.nodes(nodes)
-			.on("tick", ticked)
-			.force("link",
-				   // This force attracts nodes that are connected
-				   d3.forceLink()
-				   .links(links)
-				   .id(function(d) {
-					   return d.id;
-				   })
-				   .distance(function(d) {
-				   	   var dist = 1;
-				   	   var weightClassDifference = Math.abs(
-				   		   weightClasses.indexOf(d.source.wClass) - weightClasses.indexOf(d.target.wClass));
-					   
-				   	   dist += weightClassDifference;
+			var simulation = d3.forceSimulation()
+				.nodes(nodes)
+				.on("tick", ticked)
+				.force("link",
+					   // This force attracts nodes that are connected
+					   d3.forceLink()
+					   .links(links)
+					   .id(function(d) {
+						   return d.id;
+					   })
+					   .distance(function(d) {
+				   		   var dist = 1;
+				   		   var weightClassDifference = Math.abs(
+				   			   weightClasses.indexOf(d.source.wClass) - weightClasses.indexOf(d.target.wClass));
+						   
+				   		   dist += weightClassDifference;
 
-				   	   dist *= 100;
-					   
-				   	   return dist;
-				   })
-				   .strength(function(d) {
-				   	   var str = 1;
-				   	   var weightClassDifference = Math.abs(
-				   		   weightClasses.indexOf(d.source.wClass) - weightClasses.indexOf(d.target.wClass));
-					   
-				   	   str += weightClassDifference;
+				   		   dist *= 100;
+						   
+				   		   return dist;
+					   })
+					   .strength(function(d) {
+				   		   var str = 1;
+				   		   var weightClassDifference = Math.abs(
+				   			   weightClasses.indexOf(d.source.wClass) - weightClasses.indexOf(d.target.wClass));
+						   
+				   		   str += weightClassDifference;
 
-				   	   str *= .5;
-					   
-				   	   return str;
-				   })
-				  )
-			.force(
-				// This force repels nodes away from each other
-				"charge",
-				d3.forceManyBody()
-					.distanceMax(300)
-			)
-			.force(
-				// This force centers the network as a whole around the center of the screen
-				"center",
-				d3.forceCenter()
-				   .x(width / 2)
-				   .y(height / 2)
-				  )
-			.force(
-				// This force should position the lighter weight clusters to the left and
-				// heavier ones to the right
-				"xPosForce",
-				d3.forceX(function(d) {
-					var result = getXForWeightClass(d.wClass);
+				   		   str *= .5;
+						   
+				   		   return str;
+					   })
+					  )
+				.force(
+					// This force repels nodes away from each other
+					"charge",
+					d3.forceManyBody()
+						.distanceMax(300)
+				)
+				.force(
+					// This force centers the network as a whole around the center of the screen
+					"center",
+					d3.forceCenter()
+						.x(width / 2)
+						.y(height / 2)
+				)
+				.force(
+					// This force should position the lighter weight clusters to the left and
+					// heavier ones to the right
+					"xPosForce",
+					d3.forceX(function(d) {
+						var result = getXForWeightClass(d.wClass);
+						return result;
+					})
+				);
+
+			var link = svg.append("g")
+				.attr("class", "link")
+				.selectAll("line")
+				.data(links)
+				.enter().append("line")
+				.attr("stroke-width", function(d) {
+					return 2;
+				})
+				.attr("opacity", function(d) {
+					var result = .05 + .95 * (d.count / maxHead2HeadCount);
 					return result;
+				});
+
+			var node = svg.append("g")
+				.attr("class", "node")
+				.selectAll("nodes")
+				.data(nodes)
+				.enter().append("g");
+
+			node.append("circle")
+				.attr("r", function(d) {
+					return 1 + 10 * d.winPercent;
 				})
-			);
-
-		var link = svg.append("g")
-			.attr("class", "links")
-			.selectAll("line")
-			.data(links)
-			.enter().append("line")
-			.attr("stroke-width", function(d) {
-				return 2;
-			})
-			.attr("opacity", function(d) {
-				var result = .05 + .95 * (d.count / maxHead2HeadCount);
-				return result;
-			});
-
-		var node = svg.append("g")
-			.attr("class", "nodes")
-			.selectAll("nodes")
-			.data(nodes)
-			.enter().append("g");
-
-		node.append("circle")
-			.attr("r", function(d) {
-				return 1 + 10 * d.winPercent;
-			})
-			.attr("fill", function(d) {
-				return color(weightClasses.indexOf(d.wClass));
-			})
-
-		// node.append("text")
-		// 	.text(function(d) { return d.name });
-
-		function ticked() {
-			function clampX(value) { return Math.min(Math.max(value, 50), width - 50); }
-			function clampY(value) { return Math.min(Math.max(value, 50), height - 50); }
-			
-			node.selectAll("circle")
-				.attr("cx", function(d) { return clampX(d.x); })
-				.attr("cy", function(d) { return clampY(d.y); });
-
-			// node.selectAll("text")
-			// 	.attr("x", function(d) { return d.x; })
-			// 	.attr("y", function(d) { return d.y; });
-
-			link
-				.attr("x1", function(d) { return clampX(d.source.x); })
-				.attr("y1", function(d) { return clampY(d.source.y); })
-				.attr("x2", function(d) { return clampX(d.target.x); })
-				.attr("y2", function(d) { return clampY(d.target.y); });
-		}
-
-		// Create tooltip for hovering over weight class labels
-		var wClassTooltip = d3.select(".chart").append("div");
-		wClassTooltip.attr("class", "tooltip")
-			.style("opacity", 0);
-
-		// Create weight class labels
-		for(var i = 0; i < weightClasses.length; i++) {
-			var wClass = weightClasses[i];
-			
-			svg.append("text")
-				.attr("x", getXForWeightClass(wClass))
-				.attr("y", function() {
-					if(i % 2 === 0) {
-						return 30;
-					}
-					else {
-						return 80;
-					}
+				.attr("fill", function(d) {
+					return color(weightClasses.indexOf(d.wClass));
 				})
-				.attr("text-anchor", "middle")
-				.attr("font-size", 30)
-				.attr("fill", color(i))
-				.attr("font-family", "Arial")
-				.attr("cursor", "default")
-				.text(wClass)
-				.on("mousemove", (function(closureValue) {
-					// extremely overly complicated way of capturing wClass
-					// at the time we create the handler function. javascript :(
-					return function() {
-						var htmlString = weightDescriptions[closureValue] + "<br>" + countPerWeightClass[closureValue] + " fighters";
-						
+
+			// node.append("text")
+			// 	.text(function(d) { return d.name });
+
+			function ticked() {
+				function clampX(value) { return Math.min(Math.max(value, 50), width - 50); }
+				function clampY(value) { return Math.min(Math.max(value, 50), height - 50); }
+				
+				node.selectAll("circle")
+					.attr("cx", function(d) { return clampX(d.x); })
+					.attr("cy", function(d) { return clampY(d.y); });
+
+				// node.selectAll("text")
+				// 	.attr("x", function(d) { return d.x; })
+				// 	.attr("y", function(d) { return d.y; });
+
+				link
+					.attr("x1", function(d) { return clampX(d.source.x); })
+					.attr("y1", function(d) { return clampY(d.source.y); })
+					.attr("x2", function(d) { return clampX(d.target.x); })
+					.attr("y2", function(d) { return clampY(d.target.y); });
+			}
+
+			// Create tooltip for hovering over weight class labels
+			var wClassTooltip = d3.select(".chart").append("div");
+			wClassTooltip.attr("class", "tooltip")
+				.style("opacity", 0);
+
+			// Create weight class labels
+			for(var i = 0; i < weightClasses.length; i++) {
+				var wClass = weightClasses[i];
+				
+				svg.append("text")
+					.attr("x", getXForWeightClass(wClass))
+					.attr("y", function() {
+						if(i % 2 === 0) {
+							return 30;
+						}
+						else {
+							return 80;
+						}
+					})
+					.attr("text-anchor", "middle")
+					.attr("font-size", 30)
+					.attr("fill", color(i))
+					.attr("font-family", "Arial")
+					.attr("cursor", "default")
+					.text(wClass)
+					.on("mousemove", (function(closureValue) {
+						// extremely overly complicated way of capturing wClass
+						// at the time we create the handler function. javascript :(
+						return function() {
+							var htmlString = weightDescriptions[closureValue] + "<br>" + countPerWeightClass[closureValue] + " fighters";
+							
+							wClassTooltip.transition()
+								.duration(100)
+								.style("opacity", 1);
+
+							wClassTooltip.html(htmlString)
+								.style("left", (d3.event.pageX) + "px")
+								.style("top", (d3.event.pageY + 20) + "px");
+
+							d3.selectAll(".node circle")
+								.transition()
+								.duration(200)
+								.style("stroke", function(d) {
+									if(d.wClass === closureValue) {
+										return "#000000"; 
+									}
+									else {
+										return "#FFFFFF";
+									}
+								})
+						}
+					})(wClass))
+					.on("mouseout", function() {
 						wClassTooltip.transition()
 							.duration(100)
-							.style("opacity", 1);
+							.style("opacity", 0);
 
-						wClassTooltip.html(htmlString)
-							.style("left", (d3.event.pageX) + "px")
-							.style("top", (d3.event.pageY + 20) + "px");
-					}
-				})(wClass))
-				.on("mouseout", function() {
-					wClassTooltip.transition()
-						.duration(100)
-						.style("opacity", 0);
-				});
+						d3.selectAll(".node circle")
+							.transition()
+							.duration(200)
+							.style("stroke", "#FFFFFF")
+					});
+			}
 		}
+
+		createInfoViz(null, null, null);
 	});
 });
