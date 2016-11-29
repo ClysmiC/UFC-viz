@@ -1,8 +1,35 @@
+// master list of fighters
+// dict indexed by fighter id
 var fighters = {};
+
+// master list of matchups
+// list of objects that look like { source: [fighterObj], target: [fighterObj], count: [number] }
+var matchups = [];
+
+// Master list of weight classes.
+// After parsing data, any class that has 0 fighters in it gets removed
+// from this list.
 var weightClasses = ["Atomweight", "Strawweight", "Flyweight",
 					 "Bantamweight", "Featherweight", "Lightweight",
 					 "Welterweight", "Middleweight", "Light Heavyweight",
 					 "Heavyweight", "Super Heavyweight"];
+
+// Dict indexed by weight class that returns true if selected,
+// false if not -- will be set true when graph gets created if
+// that class has > 0 fighters. Then, the user can toggle
+// by clicking on the labels
+var selectedWeightClasses = {}
+selectedWeightClasses["Atomweight"] = false;
+selectedWeightClasses["Strawweight"] = false;
+selectedWeightClasses["Flyweight"] = false;
+selectedWeightClasses["Bantamweight"] = false;
+selectedWeightClasses["Featherweight"] = false;
+selectedWeightClasses["Lightweight"] = false;
+selectedWeightClasses["Welterweight"] = false;
+selectedWeightClasses["Middleweight"] = false;
+selectedWeightClasses["Light Heavyweight"] = false;
+selectedWeightClasses["Heavyweight"] = false;
+selectedWeightClasses["Super Heavyweight"] = false;
 
 var weightDescriptions = {};
 weightDescriptions["Atomweight"] = "<105 lb (women only)";
@@ -17,17 +44,41 @@ weightDescriptions["Light Heavyweight"] = "185-205 lb";
 weightDescriptions["Heavyweight"] = "205-265 lb";
 weightDescriptions["Super Heavyweight"] = ">265 lb";
 
+// fighters with less than this number of fights aren't shown on the network
 var MIN_FIGHT_COUNT = 10;
 
+// svg dimensions
 var width = window.innerWidth - 100
 var height = window.innerHeight - 100;
 
-function getXForWeightClass(weightClass) {
-	var i = weightClasses.indexOf(weightClass);
+// Gets X position for the cluster or label of a given weight class
+// weightClass - class being queried
+// weightClassList - ordered list of weight classes being considered.
+//                   for label X's this should be all of them, but when
+//                   the network is filtered by weight class only consider
+//                   the list of filtered classes
+function getXForWeightClass(weightClass, weightClassList) {
+	if(weightClassList == null) {
+		weightClassList = weightClasses;
+	}
+	
+	var i = weightClassList.indexOf(weightClass);
 
 	if(i === -1) return -1;
 
-	return width / weightClasses.length * (i + .5);
+	return width / weightClassList.length * (i + .5);
+}
+
+function getSelectedWeightClasses() {
+	selection = [];
+
+	for(var wClass in selectedWeightClasses) {
+		if (selectedWeightClasses[wClass]) {
+			selection.push(wClass);
+		}
+	}
+
+	return selection;
 }
 
 d3.csv("fighters.csv", function(data) {
@@ -136,6 +187,9 @@ d3.csv("fighters.csv", function(data) {
 					weightClasses.splice(i, 1); // remove i'th index
 					i--; // decrement i to avoid skipping next element
 				}
+				else {
+					selectedWeightClasses[weightClasses[i]] = true;
+				}
 			}
 		}
 
@@ -157,7 +211,6 @@ d3.csv("fighters.csv", function(data) {
 		}
 
 		// Create list of all the links
-		var matchups = [];
 		var maxHead2HeadCount = 1;
 		
 		for(var id in fighters) {
@@ -226,10 +279,20 @@ d3.csv("fighters.csv", function(data) {
 			// Clear whatever is currently on the svg
 			svg.selectAll("*").remove();
 
+			// sort the wClasses list ordinally
+			if(wClasses == null) {
+				wClasses = weightClasses;
+			}
+			else {
+				wClasses.sort(function(a, b) {
+					return weightClasses.indexOf(a) - weightClasses.indexOf(b);
+				});
+			}
+
 			function filter(id) {
 				var fighter = fighters[id];
 
-				if(wClasses == null || wClasses.indexOf(fighter.wClass) !== -1) {
+				if(wClasses.indexOf(fighter.wClass) !== -1) {
 					var addFighter = false;
 
 					// If this fighter is one of the "focus" fighters,
@@ -305,7 +368,8 @@ d3.csv("fighters.csv", function(data) {
 				   		   dist += weightClassDifference;
 
 				   		   dist *= 100;
-						   
+
+						   return 100;
 				   		   return dist;
 					   })
 					   .strength(function(d) {
@@ -338,7 +402,7 @@ d3.csv("fighters.csv", function(data) {
 					// heavier ones to the right
 					"xPosForce",
 					d3.forceX(function(d) {
-						var result = getXForWeightClass(d.wClass);
+						var result = getXForWeightClass(d.wClass, wClasses);
 						return result;
 					})
 				);
@@ -375,7 +439,7 @@ d3.csv("fighters.csv", function(data) {
 
 			function ticked() {
 				function clampX(value) { return Math.min(Math.max(value, 50), width - 50); }
-				function clampY(value) { return Math.min(Math.max(value, 50), height - 50); }
+				function clampY(value) { return Math.min(Math.max(value, 100), height - 50); }
 				
 				node.selectAll("circle")
 					.attr("cx", function(d) { return clampX(d.x); })
@@ -402,7 +466,7 @@ d3.csv("fighters.csv", function(data) {
 				var wClass = weightClasses[i];
 				
 				svg.append("text")
-					.attr("x", getXForWeightClass(wClass))
+					.attr("x", getXForWeightClass(wClass, weightClasses))
 					.attr("y", function() {
 						if(i % 2 === 0) {
 							return 30;
@@ -453,11 +517,15 @@ d3.csv("fighters.csv", function(data) {
 							.transition()
 							.duration(150)
 							.style("stroke", "#FFFFFF")
-					});
+					})
+					.on("click", (function(closureValue) {
+						return function() {
+							alert(closureValue);
+						}
+					})(wClass));
 			}
 		}
 
-		createInfoViz(["Heavyweight", "Light Heavyweight"], null, null);
-		// createInfoViz(null, null, null);
+		createInfoViz(getSelectedWeightClasses(), null, null);
 	});
 });
