@@ -4,10 +4,23 @@ var weightClasses = ["Atomweight", "Strawweight", "Flyweight",
 					 "Welterweight", "Middleweight", "Light Heavyweight",
 					 "Heavyweight", "Super Heavyweight"];
 
+var weightDescriptions = {};
+weightDescriptions["Atomweight"] = "<105 lb (women only)";
+weightDescriptions["Strawweight"] = "<115 lb";
+weightDescriptions["Flyweight"] = "115-125 lb";
+weightDescriptions["Bantamweight"] = "125-135 lb";
+weightDescriptions["Featherweight"] = "135-145 lb";
+weightDescriptions["Lightweight"] = "145-155 lb";
+weightDescriptions["Welterweight"] = "155-170 lb";
+weightDescriptions["Middleweight"] = "170-185 lb";
+weightDescriptions["Light Heavyweight"] = "185-205 lb";
+weightDescriptions["Heavyweight"] = "205-265 lb";
+weightDescriptions["Super Heavyweight"] = ">265 lb";
+
 var MIN_FIGHT_COUNT = 10;
 
-var width = window.innerWidth - 50
-var height = window.innerHeight - 50;
+var width = window.innerWidth - 100
+var height = window.innerHeight - 100;
 
 function getXForWeightClass(weightClass) {
 	var i = weightClasses.indexOf(weightClass);
@@ -195,12 +208,11 @@ d3.csv("fighters.csv", function(data) {
 		
 		//
 		// Now, construct the network!
-		
 
-
-		var svg = d3.select("body").append("svg")
+		var svg = d3.select(".chart").append("svg")
 			.attr("width", width)
-			.attr("height", height);
+			.attr("height", height)
+			.attr("class", "svg");
 
 		var color = d3.scaleOrdinal(d3.schemeCategory20);
 
@@ -215,26 +227,26 @@ d3.csv("fighters.csv", function(data) {
 					   return d.id;
 				   })
 				   .distance(function(d) {
-					   var dist = 1;
-					   var weightClassDifference = Math.abs(
-						   weightClasses.indexOf(d.source.wClass) - weightClasses.indexOf(d.target.wClass));
+				   	   var dist = 1;
+				   	   var weightClassDifference = Math.abs(
+				   		   weightClasses.indexOf(d.source.wClass) - weightClasses.indexOf(d.target.wClass));
 					   
-					   dist += weightClassDifference;
+				   	   dist += weightClassDifference;
 
-					   dist *= 100;
+				   	   dist *= 100;
 					   
-					   return dist;
+				   	   return dist;
 				   })
 				   .strength(function(d) {
-					   var str = 1;
-					   var weightClassDifference = Math.abs(
-						   weightClasses.indexOf(d.source.wClass) - weightClasses.indexOf(d.target.wClass));
+				   	   var str = 1;
+				   	   var weightClassDifference = Math.abs(
+				   		   weightClasses.indexOf(d.source.wClass) - weightClasses.indexOf(d.target.wClass));
 					   
-					   str += weightClassDifference;
+				   	   str += weightClassDifference;
 
-					   str *= .5;
+				   	   str *= .5;
 					   
-					   return str;
+				   	   return str;
 				   })
 				  )
 			.force(
@@ -269,7 +281,7 @@ d3.csv("fighters.csv", function(data) {
 				return 2;
 			})
 			.attr("opacity", function(d) {
-				var result = .1 + .9 * (d.count / maxHead2HeadCount);
+				var result = .05 + .95 * (d.count / maxHead2HeadCount);
 				return result;
 			});
 
@@ -281,7 +293,7 @@ d3.csv("fighters.csv", function(data) {
 
 		node.append("circle")
 			.attr("r", function(d) {
-				return 3 + 8 * d.winPercent;
+				return 1 + 10 * d.winPercent;
 			})
 			.attr("fill", function(d) {
 				return color(weightClasses.indexOf(d.wClass));
@@ -291,21 +303,30 @@ d3.csv("fighters.csv", function(data) {
 		// 	.text(function(d) { return d.name });
 
 		function ticked() {
-			link
-				.attr("x1", function(d) { return d.source.x; })
-				.attr("y1", function(d) { return d.source.y; })
-				.attr("x2", function(d) { return d.target.x; })
-				.attr("y2", function(d) { return d.target.y; });
-
+			function clampX(value) { return Math.min(Math.max(value, 50), width - 50); }
+			function clampY(value) { return Math.min(Math.max(value, 50), height - 50); }
+			
 			node.selectAll("circle")
-				.attr("cx", function(d) { return d.x; })
-				.attr("cy", function(d) { return d.y; });
+				.attr("cx", function(d) { return clampX(d.x); })
+				.attr("cy", function(d) { return clampY(d.y); });
 
-			node.selectAll("text")
-				.attr("x", function(d) { return d.x; })
-				.attr("y", function(d) { return d.y; });	  
+			// node.selectAll("text")
+			// 	.attr("x", function(d) { return d.x; })
+			// 	.attr("y", function(d) { return d.y; });
+
+			link
+				.attr("x1", function(d) { return clampX(d.source.x); })
+				.attr("y1", function(d) { return clampY(d.source.y); })
+				.attr("x2", function(d) { return clampX(d.target.x); })
+				.attr("y2", function(d) { return clampY(d.target.y); });
 		}
 
+		// Create tooltip for hovering over weight class labels
+		var wClassTooltip = d3.select(".chart").append("div");
+		wClassTooltip.attr("class", "tooltip")
+			.style("opacity", 0);
+
+		// Create weight class labels
 		for(var i = 0; i < weightClasses.length; i++) {
 			var wClass = weightClasses[i];
 			
@@ -323,7 +344,28 @@ d3.csv("fighters.csv", function(data) {
 				.attr("font-size", 30)
 				.attr("fill", color(i))
 				.attr("font-family", "Arial")
+				.attr("cursor", "default")
 				.text(wClass)
+				.on("mousemove", (function(closureValue) {
+					// extremely overly complicated way of capturing wClass
+					// at the time we create the handler function. javascript :(
+					return function() {
+						var htmlString = weightDescriptions[closureValue] + "<br>" + countPerWeightClass[closureValue] + " fighters";
+						
+						wClassTooltip.transition()
+							.duration(100)
+							.style("opacity", 1);
+
+						wClassTooltip.html(htmlString)
+							.style("left", (d3.event.pageX) + "px")
+							.style("top", (d3.event.pageY + 20) + "px");
+					}
+				})(wClass))
+				.on("mouseout", function() {
+					wClassTooltip.transition()
+						.duration(100)
+						.style("opacity", 0);
+				});
 		}
 	});
 });

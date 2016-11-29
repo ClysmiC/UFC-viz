@@ -7,3 +7,19 @@
   stroke: #fff;
   stroke-width: 1.5px;
 }
+
+.chart {
+	background: #dddddd;
+	margin: 0 auto;
+}
+
+.svg {
+	background: #eeeeee;
+}
+
+.tooltip {
+	position: absolute;
+	left: 0px;
+	top: 0px;
+	background: white;
+}
