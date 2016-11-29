@@ -253,10 +253,18 @@ d3.csv("fighters.csv", function(data) {
 			}
 		}
 
+		// Insert DOM elements needed (svg, tooltips)
 		var svg = d3.select(".chart").append("svg")
-				.attr("width", width)
-				.attr("height", height)
-				.attr("class", "svg");
+			.attr("width", width)
+			.attr("height", height)
+			.attr("class", "svg");
+
+		var wClassTooltip = d3.select(".chart").append("div");
+		wClassTooltip.attr("class", "tooltip")
+			.style("opacity", 0);
+
+		// Generate color scheme
+		var color = d3.scaleOrdinal(d3.schemeCategory20);
 		
 		//
 		// This function completely scratches whatever is currently
@@ -278,6 +286,10 @@ d3.csv("fighters.csv", function(data) {
 		function createInfoViz(wClasses, focusFighter1, focusFighter2) {
 			// Clear whatever is currently on the svg
 			svg.selectAll("*").remove();
+
+			if(wClasses[0]==="foo") {
+				return;
+			}
 
 			// sort the wClasses list ordinally
 			if(wClasses == null) {
@@ -347,8 +359,6 @@ d3.csv("fighters.csv", function(data) {
 					);
 				}
 			}
-
-			var color = d3.scaleOrdinal(d3.schemeCategory20);
 
 			var simulation = d3.forceSimulation()
 				.nodes(nodes)
@@ -456,11 +466,6 @@ d3.csv("fighters.csv", function(data) {
 					.attr("y2", function(d) { return clampY(d.target.y); });
 			}
 
-			// Create tooltip for hovering over weight class labels
-			var wClassTooltip = d3.select(".chart").append("div");
-			wClassTooltip.attr("class", "tooltip")
-				.style("opacity", 0);
-
 			// Create weight class labels
 			for(var i = 0; i < weightClasses.length; i++) {
 				var wClass = weightClasses[i];
@@ -477,13 +482,26 @@ d3.csv("fighters.csv", function(data) {
 					})
 					.attr("text-anchor", "middle")
 					.attr("font-size", 30)
-					.attr("fill", color(i))
+					.attr("fill", (function(closureValue) {
+						return function() {
+							if(selectedWeightClasses[closureValue]) {
+								return color(i);
+							}
+							else {
+								return "#aaaaaa";
+							}
+						}
+					})(wClass))
+					// .attr("stroke-width", 1)
+					// .attr("stroke", (function(closureValue) {
+					// 	return function() {
+							
+					// 	}
+					// })(wClass))
 					.attr("font-family", "Arial")
-					.attr("cursor", "default")
+					.attr("cursor", "pointer")
 					.text(wClass)
 					.on("mousemove", (function(closureValue) {
-						// extremely overly complicated way of capturing wClass
-						// at the time we create the handler function. javascript :(
 						return function() {
 							var htmlString = weightDescriptions[closureValue] + "<br>" + countPerWeightClass[closureValue] + " fighters";
 							
@@ -520,7 +538,11 @@ d3.csv("fighters.csv", function(data) {
 					})
 					.on("click", (function(closureValue) {
 						return function() {
-							alert(closureValue);
+							// toggle
+							selectedWeightClasses[closureValue] = !selectedWeightClasses[closureValue];
+
+							// createInfoViz(["foo"], null, null);
+							createInfoViz(getSelectedWeightClasses(), null, null);
 						}
 					})(wClass));
 			}
