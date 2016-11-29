@@ -259,8 +259,8 @@ d3.csv("fighters.csv", function(data) {
 			.attr("height", height)
 			.attr("class", "svg");
 
-		var wClassTooltip = d3.select(".chart").append("div");
-		wClassTooltip.attr("class", "tooltip")
+		var tooltip = d3.select(".chart").append("div");
+		tooltip.attr("class", "tooltip")
 			.style("opacity", 0);
 
 		// Generate color scheme
@@ -455,6 +455,16 @@ d3.csv("fighters.csv", function(data) {
 				.attr("fill", function(d) {
 					return color(weightClasses.indexOf(d.wClass));
 				})
+				.on("mouseover", function(fighter) {
+					// fill out tooltip
+
+					// fade opacity of non-connected fighters
+				})
+				.on("mouseout", function(fighter) {
+					// hide tooltip
+
+					// restore opacity of non-connected fighters
+				})
 
 			// d3nodes.append("text")
 			// 	.text(function(d) { return d.name });
@@ -517,11 +527,11 @@ d3.csv("fighters.csv", function(data) {
 						return function() {
 							var htmlString = weightDescriptions[closureValue] + "<br>" + countPerWeightClass[closureValue] + " fighters";
 							
-							wClassTooltip.transition()
+							tooltip.transition()
 								.duration(100)
 								.style("opacity", 1);
 
-							wClassTooltip.html(htmlString)
+							tooltip.html(htmlString)
 								.style("left", (d3.event.pageX) + "px")
 								.style("top", (d3.event.pageY + 20) + "px");
 
@@ -539,7 +549,7 @@ d3.csv("fighters.csv", function(data) {
 						}
 					})(wClass))
 					.on("mouseout", function() {
-						wClassTooltip.transition()
+						tooltip.transition()
 							.duration(100)
 							.style("opacity", 0);
 
