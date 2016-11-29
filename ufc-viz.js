@@ -6,6 +6,17 @@ var weightClasses = ["Atomweight", "Strawweight", "Flyweight",
 
 var MIN_FIGHT_COUNT = 10;
 
+var width = window.innerWidth - 50
+var height = window.innerHeight - 50;
+
+function getXForWeightClass(weightClass) {
+	var i = weightClasses.indexOf(weightClass);
+
+	if(i === -1) return -1;
+
+	return width / weightClasses.length * (i + .5);
+}
+
 d3.csv("fighters.csv", function(data) {
 	// Load all fighter data into memory
 	for(var i = 0; i < data.length; i++) {
@@ -185,8 +196,7 @@ d3.csv("fighters.csv", function(data) {
 		//
 		// Now, construct the network!
 		
-		var width = window.innerWidth - 50
-		var height = window.innerHeight - 50;
+
 
 		var svg = d3.select("body").append("svg")
 			.attr("width", width)
@@ -245,8 +255,8 @@ d3.csv("fighters.csv", function(data) {
 				// heavier ones to the right
 				"xPosForce",
 				d3.forceX(function(d) {
-					var index = weightClasses.indexOf(d.wClass);
-					return width / weightClasses.length * index;
+					var result = getXForWeightClass(d.wClass);
+					return result;
 				})
 			);
 
@@ -294,6 +304,26 @@ d3.csv("fighters.csv", function(data) {
 			node.selectAll("text")
 				.attr("x", function(d) { return d.x; })
 				.attr("y", function(d) { return d.y; });	  
+		}
+
+		for(var i = 0; i < weightClasses.length; i++) {
+			var wClass = weightClasses[i];
+			
+			svg.append("text")
+				.attr("x", getXForWeightClass(wClass))
+				.attr("y", function() {
+					if(i % 2 === 0) {
+						return 30;
+					}
+					else {
+						return 80;
+					}
+				})
+				.attr("text-anchor", "middle")
+				.attr("font-size", 30)
+				.attr("fill", color(i))
+				.attr("font-family", "Arial")
+				.text(wClass)
 		}
 	});
 });
