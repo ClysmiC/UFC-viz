@@ -157,7 +157,7 @@ d3.csv("fighters.csv", function(data) {
 		}
 
 		// Create list of all the links
-		var links = [];
+		var matchups = [];
 		var maxHead2HeadCount = 1;
 		
 		for(var id in fighters) {
@@ -181,12 +181,12 @@ d3.csv("fighters.csv", function(data) {
 					var index = myLinkedOpponents.indexOf(fight.opponentId);
 					if(index === -1) {
 						var newLink = {
-								source: id,
-								target: fight.opponentId,
+								fighter1: id,
+								fighter2: fight.opponentId,
 								count: 1
 						};
 						
-						links.push(newLink);
+						matchups.push(newLink);
 
 						// myLinkedOpponents and myLinks must have parallel indices
 						myLinkedOpponents.push(fight.opponentId);
@@ -199,6 +199,11 @@ d3.csv("fighters.csv", function(data) {
 				}
 			}
 		}
+
+		var svg = d3.select(".chart").append("svg")
+				.attr("width", width)
+				.attr("height", height)
+				.attr("class", "svg");
 		
 		//
 		// This function completely scratches whatever is currently
@@ -218,17 +223,67 @@ d3.csv("fighters.csv", function(data) {
 		//                 in focus, this param is null
 		//
 		function createInfoViz(wClasses, focusFighter1, focusFighter2) {
-			// (Map our fighter dict into a list)
-			var nodes = [];
+			// Clear whatever is currently on the svg
+			svg.selectAll("*").remove();
 
-			for(var id in fighters) {
-				nodes.push(fighters[id]);
+			function filter(id) {
+				var fighter = fighters[id];
+
+				if(wClasses == null || wClasses.indexOf(fighter.wClass) !== -1) {
+					var addFighter = false;
+
+					// If this fighter is one of the "focus" fighters,
+					// (or no focus fighter is specified), add him
+					if(focusFighter1 == null ||
+					   focusFighter1 === id ||
+					   focusFighter2 === id) {
+						return true;
+					}
+
+					// If this fighter is directly connected to either of the
+					// focus fighters, add him
+					if(!addFighter) {
+						for(var i = 0; i < fighter.fightList.length; i++) {
+							var opponentId = fighter.fightList[i].id;
+
+							if(opponentId === focusFighter1 || opponentId === focusFighter2) {
+								return true;
+							}
+						}
+					}
+
+					return false;
+				}
 			}
 			
-			var svg = d3.select(".chart").append("svg")
-				.attr("width", width)
-				.attr("height", height)
-				.attr("class", "svg");
+			// Build list of nodes and links out of our master lists (fighters and fights)
+			// That meet our filter criteria
+			var nodes = [];
+			var links = [];
+
+			// fighters is a dict, so iterate by key
+			for(var id in fighters) {
+				if(filter(id)) {
+					nodes.push(fighters[id]);
+				}
+			}
+
+			// matchups is a list, so iterate normally
+			for(var i = 0; i < matchups.length; i++) {
+				var matchup = matchups[i];
+				var id1 = matchup.fighter1;
+				var id2 = matchup.fighter2;
+
+				if(filter(id1) && filter(id2)) {
+					links.push(
+						{
+							source: fighters[id1],
+							target: fighters[id2],
+							count: matchup.count
+						}
+					);
+				}
+			}
 
 			var color = d3.scaleOrdinal(d3.schemeCategory20);
 
@@ -378,7 +433,7 @@ d3.csv("fighters.csv", function(data) {
 
 							d3.selectAll(".node circle")
 								.transition()
-								.duration(200)
+								.duration(150)
 								.style("stroke", function(d) {
 									if(d.wClass === closureValue) {
 										return "#000000"; 
@@ -396,12 +451,13 @@ d3.csv("fighters.csv", function(data) {
 
 						d3.selectAll(".node circle")
 							.transition()
-							.duration(200)
+							.duration(150)
 							.style("stroke", "#FFFFFF")
 					});
 			}
 		}
 
-		createInfoViz(null, null, null);
+		createInfoViz(["Heavyweight", "Light Heavyweight"], null, null);
+		// createInfoViz(null, null, null);
 	});
 });
