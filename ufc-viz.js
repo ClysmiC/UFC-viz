@@ -49,7 +49,7 @@ var MIN_FIGHT_COUNT = 10;
 
 // svg dimensions
 var width = window.innerWidth - 100
-var height = window.innerHeight - 100;
+var height = window.innerHeight - 10;
 
 // space allocated at top of svg exclusively for the labels
 var labelMargin = 100;
@@ -84,12 +84,100 @@ function getSelectedWeightClasses() {
 	return selection;
 }
 
+function getSvgCircleForFighter(id) {
+	var circle = d3.select("#node" + id);
+	
+	if(circle.empty()) {
+		return null;
+	}
+
+	return circle;
+}
+
+// note: tooltip must be rendered before calling this
+// so we can use the tooltip's width/height in our calculations
+function placeTooltip(tooltip) {
+	function calculatePositionForFighterTooltip() {
+		var result = { x: 0, y: 0 }
+		
+		var circle = getSvgCircleForFighter(tooltipFocusId);
+		var fighter = fighters[tooltipFocusId];
+
+		var myX = parseFloat(circle.attr("cx"));
+		var myY = parseFloat(circle.attr("cy"));
+
+		// add unit vectors of opponents relative positions together
+		// the tooltip will be placed in the opposite direction
+		var opponentVector = { x: 0, y: 0 }
+		
+		for(var i = 0; i < fighter.fightList.length; i++) {
+			var opponentId = fighter.fightList[i].opponentId;
+
+			var opponentCircle = getSvgCircleForFighter(opponentId);
+
+			if(opponentCircle !== null) {
+				var deltaX = parseFloat(opponentCircle.attr("cx")) - myX;
+				var deltaY = parseFloat(opponentCircle.attr("cy")) - myY;
+
+				var len = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+				
+				opponentVector.x += deltaX / len;
+				opponentVector.y += deltaY / len;
+			}
+		}
+
+		// normalize
+		opponentVectorLen = Math.sqrt(opponentVector.x * opponentVector.x + opponentVector.y * opponentVector.y);
+		opponentVector.x /= opponentVectorLen;
+		opponentVector.y /= opponentVectorLen;
+
+		var tooltipMaxDim = Math.max(getToolTipWidth(), getToolTipHeight());
+
+		result.x = myX - (tooltipMaxDim * .75 * opponentVector.x);
+		result.y = myY - (tooltipMaxDim * .75 * opponentVector.y);
+
+		return result;
+	}
+	
+	var tooltipCenter = calculatePositionForFighterTooltip();
+	
+	tooltip
+		.style("left", (tooltipCenter.x) + "px")
+		.style("top", (tooltipCenter.y) + "px")
+		.style("transform", "translate(" +
+			   -getToolTipWidth() / 2 + "px," +
+			   -getToolTipHeight() / 2 + "px)")
+}
+
+function getToolTipWidth() {
+	return d3.select(".tooltip").node().getBoundingClientRect().width;
+}
+
+function getToolTipHeight() {
+	return d3.select(".tooltip").node().getBoundingClientRect().height;
+}
+
+// example: 68 -> 5' 8"
+function inchesToHeightStr(inches) {
+	if(typeof inches === 'string') {
+		inches = parseInt(inches);
+	}
+
+	var ft = Math.floor(inches / 12);
+	var in_ = inches % 12;
+
+	return ft + "' " + in_ + '"';
+}
+
+
 d3.csv("fighters.csv", function(data) {
 	// Load all fighter data into memory
 	for(var i = 0; i < data.length; i++) {
 		var id = data[i]["fid"];
 		var name = data[i]["name"];
 		var wClass = data[i]["class"];
+		var fighterHeight = data[i]["height"];
+		var fighterWeight = data[i]["weight"];
 		var fightList = [];
 
 		if(weightClasses.indexOf(wClass) > -1) {
@@ -98,6 +186,8 @@ d3.csv("fighters.csv", function(data) {
 				name: name,
 				wClass: wClass,
 				fightList: fightList,
+				weight: fighterWeight,
+				height: fighterHeight
 			};
 		}
 		else {
@@ -118,7 +208,7 @@ d3.csv("fighters.csv", function(data) {
 			var result2 = fight["f2result"];
 			
 			if(id1 in fighters && id2 in fighters) {
-				if(result1 == "win" || result2 == "win")
+				if(result1 == "win" || result1 == "loss" || result1 == "draw")
 				{
 					fighters[id1].fightList.push(
 						{
@@ -137,7 +227,7 @@ d3.csv("fighters.csv", function(data) {
 					);
 				}
 				else {
-					console.log("Fight didn't result in win/loss (results: " + result1 + "/" + result2 + ") ... Ignoring fight.");
+					console.log("Fight didn't result in win/loss/draw (results: " + result1 + "/" + result2 + ") ... Ignoring fight.");
 				}
 			}
 			else {
@@ -196,11 +286,12 @@ d3.csv("fighters.csv", function(data) {
 			}
 		}
 
-		// Cache win % for each fighter
+		// Cache W-L and win % for each fighter
 		for(var id in fighters) {
 			var fighter = fighters[id];
 			var winCount = 0;
-			
+			var lossCount = 0;
+			var drawCount = 0;
 
 			for(var i = 0; i < fighter.fightList.length; i++) {
 				var fight = fighter.fightList[i];
@@ -208,14 +299,23 @@ d3.csv("fighters.csv", function(data) {
 				if(fight.result === "win") {
 					winCount += 1;
 				}
+
+				if(fight.result === "loss") {
+					lossCount += 1;
+				}
+
+				if(fight.result === "draw") {
+					drawCount += 1;
+				}
 			}
 
 			fighter.winPercent = winCount / fighter.fightList.length;
+			fighter.wins = winCount;
+			fighter.losses = lossCount;
+			fighter.draws = drawCount;
 		}
 
 		// Create list of all the links
-		var maxHead2HeadCount = 1;
-		
 		for(var id in fighters) {
 			var fighter = fighters[id];
 
@@ -250,7 +350,6 @@ d3.csv("fighters.csv", function(data) {
 					}
 					else {
 						myLinks[index].count += 1;
-						maxHead2HeadCount = Math.max(maxHead2HeadCount, myLinks[index].count);
 					}
 				}
 			}
@@ -266,6 +365,8 @@ d3.csv("fighters.csv", function(data) {
 		tooltip.attr("class", "tooltip")
 			.style("opacity", 0);
 
+		tooltipFocusId = "";
+
 		// Generate color scheme
 		var color = d3.scaleOrdinal(d3.schemeCategory20);
 
@@ -279,23 +380,12 @@ d3.csv("fighters.csv", function(data) {
 		//
 		// wClasses - a list of strings describing which weight classes to include.
 		//            null means include all of the weight classes.
-		//
-		// focusFighter1 - the ID of the fighter who is being "focused" on (via
-		//                 clicking on a node), or the ID of the first of two
-		//                 fighters that are being "focused" on (via clicking on
-		//                 a link). If no node or link is in focus, this param
-		//                 is null.
-		//
-		// focusFighter2 - the ID of the second of two fighters that are being
-		//                 "focused" on (via clicking a link). If no link is
-		//                 in focus, this param is null
-		//
-		function createInfoViz(wClasses, focusFighter1, focusFighter2) {
+		function createInfoViz(wClasses) {
 
 			// This is the function that should always be called when reconstructing
 			// the infoviz. createInfoViz should only be called directly the first
 			// time the infoviz gets generated.
-			function regenerateInfoViz(wClasses, focusFighter1, focusFighter2) {											
+			function regenerateInfoViz(wClasses) {											
 
 				// not 100% how this is working but it is clearing out all
 				// the data that already exists so the graph can rebuild
@@ -332,40 +422,12 @@ d3.csv("fighters.csv", function(data) {
 				// Clear whatever is currently on the svg
 				svg.selectAll("*").remove();
 				
-				createInfoViz(wClasses, focusFighter1, focusFighter2);
+				createInfoViz(wClasses);
 			}
-			
 
 			function filter(id) {
-				var fighter = fighters[id];
-
-				if(wClasses.indexOf(fighter.wClass) !== -1) {
-					var addFighter = false;
-
-					// If this fighter is one of the "focus" fighters,
-					// (or no focus fighter is specified), add him
-					if(focusFighter1 == null ||
-					   focusFighter1 === id ||
-					   focusFighter2 === id) {
-						return true;
-					}
-
-					// If this fighter is directly connected to either of the
-					// focus fighters, add him
-					if(!addFighter) {
-						for(var i = 0; i < fighter.fightList.length; i++) {
-							var opponentId = fighter.fightList[i].id;
-
-							if(opponentId === focusFighter1 || opponentId === focusFighter2) {
-								return true;
-							}
-						}
-					}
-
-					return false;
-				}
+				return wClasses.indexOf(fighters[id].wClass) !== -1;
 			}
-			
 
 			// Build list of nodes and links out of our master lists (fighters and fights)
 			// That meet our filter criteria
@@ -441,16 +503,14 @@ d3.csv("fighters.csv", function(data) {
 				.data(links)
 				.enter().append("line")
 				.attr("stroke-width", function(d) {
-					return 2;
+					return 1 + 2 * d.count;
 				})
 				.attr("opacity", function(d) {
-					var result = .05 + .95 * (d.count / maxHead2HeadCount);
-					
 					// cache the opacity here. that way when we set it to 0,
 					// we know what to set it back to when it is reappearing
-					d.defaultOpacity = result;
+					d.defaultOpacity = 0.4;
 					
-					return result;
+					return d.defaultOpacity;
 				});
 
 			d3nodes = svg.append("g")
@@ -472,16 +532,27 @@ d3.csv("fighters.csv", function(data) {
 					return color(weightClasses.indexOf(d.wClass));
 				})
 				.on("mouseover", function(fighter) {
-					// fill out tooltip
-					htmlString = fighter.name;
+					// Create tooltip
+					htmlString = "<b>" + fighter.name + "</b>";
+					htmlString += "<hr>";
+					htmlString += fighter.wClass;
+					htmlString += "<br>";
+					htmlString += inchesToHeightStr(fighter.height) + " " + fighter.weight + " lbs";
+					htmlString += "<br>";
+					htmlString += fighter.wins + " - " + fighter.losses + " - " + fighter.draws;
+					htmlString += "<br>";
+					htmlString += "Win %: " + (fighter.winPercent * 100).toFixed(2);
+
+					tooltipFocusId = fighter.id;
+
+					tooltip.html(htmlString);
+					placeTooltip(tooltip);
 					
+
 					tooltip.transition()
 						.duration(100)
 						.style("opacity", 1);
-					
-					tooltip.html(htmlString)
-						.style("left", (d3.event.pageX) + "px")
-						.style("top", (d3.event.pageY + 20) + "px");
+
 					
 					// fade opacity of non-connected fighters
 					d3.selectAll(".node circle")
@@ -537,6 +608,8 @@ d3.csv("fighters.csv", function(data) {
 					tooltip.transition()
 						.duration(100)
 						.style("opacity", 0);
+
+					tooltipFocusId = "";
 					
 					// restore opacity of non-connected fighters and links
 					d3.selectAll(".node circle")
@@ -577,7 +650,7 @@ d3.csv("fighters.csv", function(data) {
 				d3nodes.selectAll(".fighterLabel")
 					.attr("x", function(d) { return clampX(d.x); })
 					.attr("y", function(d, _, textNodeList) {
-						var circle = d3.select("#node" + d.id);
+						var circle = getSvgCircleForFighter(d.id);
 						var radius = circle.attr("r");
 						var textHeight = textNodeList[0].getBBox().height;
 						return clampY(d.y) + textHeight + parseFloat(radius);
@@ -588,6 +661,10 @@ d3.csv("fighters.csv", function(data) {
 					.attr("y1", function(d) { return clampY(d.source.y); })
 					.attr("x2", function(d) { return clampX(d.target.x); })
 					.attr("y2", function(d) { return clampY(d.target.y); });
+
+				if(tooltipFocusId !== "") {
+					placeTooltip(tooltip);
+				}
 			}
 
 			// Create weight class labels
@@ -629,7 +706,10 @@ d3.csv("fighters.csv", function(data) {
 
 							tooltip.html(htmlString)
 								.style("left", (d3.event.pageX) + "px")
-								.style("top", (d3.event.pageY + 20) + "px");
+								.style("top", (d3.event.pageY + 20) + "px")
+								.style("transform", "translate(" +
+									   (-(getToolTipWidth() / 2) + 6) + "px," + // + small, arbitrary amount to make it appear centered under the hand cursor
+									   "0px)");
 
 							d3.selectAll(".node circle")
 								.transition()
