@@ -1,3 +1,9 @@
+var isChrome = /Chrome/.test(navigator.userAgent) && /Google Inc/.test(navigator.vendor);
+
+if(!isChrome) {
+	alert("This site was designed and tested on Google Chrome. Extreme slowdown has been noticed on Firefox. Performance on Edge and IE is acceptable, however for best experience please use Google Chrome");
+}
+
 // master list of fighters
 // dict indexed by fighter id
 var fighters = {};
@@ -506,7 +512,9 @@ d3.csv("fighters.csv", function(data) {
 				.data(links)
 				.enter().append("line")
 				.attr("stroke-width", function(d) {
-					return 1 + 2 * d.count;
+					// max # of head2head fights in our data set is 3
+					// but put a hard cap on this just for good measure
+					return Math.min(1 + 2 * d.count, 11);
 				})
 				.attr("opacity", defaultLinkOpacity)
 				.attr("stroke", defaultLinkStroke);
