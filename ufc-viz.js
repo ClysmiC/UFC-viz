@@ -54,6 +54,9 @@ var height = window.innerHeight - 10;
 // space allocated at top of svg exclusively for the labels
 var labelMargin = 100;
 
+var defaultLinkOpacity = 0.4;
+var defaultLinkStroke = "#999999";
+
 // Gets X position for the cluster or label of a given weight class
 // weightClass - class being queried
 // weightClassList - ordered list of weight classes being considered.
@@ -505,13 +508,8 @@ d3.csv("fighters.csv", function(data) {
 				.attr("stroke-width", function(d) {
 					return 1 + 2 * d.count;
 				})
-				.attr("opacity", function(d) {
-					// cache the opacity here. that way when we set it to 0,
-					// we know what to set it back to when it is reappearing
-					d.defaultOpacity = 0.4;
-					
-					return d.defaultOpacity;
-				});
+				.attr("opacity", defaultLinkOpacity)
+				.attr("stroke", defaultLinkStroke);
 
 			d3nodes = svg.append("g")
 				.attr("class", "node")
@@ -620,9 +618,7 @@ d3.csv("fighters.csv", function(data) {
 					d3.selectAll(".link line")
 						.transition()
 						.duration(100)
-						.style("opacity", function(d) {
-							return d.defaultOpacity;
-						})
+						.style("opacity", defaultLinkOpacity)
 
 					// hide all fighter labels
 					d3.selectAll(".fighterLabel")
@@ -698,7 +694,10 @@ d3.csv("fighters.csv", function(data) {
 					.text(wClass)
 					.on("mousemove", (function(closureValue) {
 						return function() {
-							var htmlString = weightDescriptions[closureValue] + "<br>" + countPerWeightClass[closureValue] + " fighters";
+							var htmlString =
+								"<b>" + weightDescriptions[closureValue] + "</b>" +
+								"<hr>" +
+								countPerWeightClass[closureValue] + " fighters";
 							
 							tooltip.transition()
 								.duration(100)
@@ -706,11 +705,14 @@ d3.csv("fighters.csv", function(data) {
 
 							tooltip.html(htmlString)
 								.style("left", (d3.event.pageX) + "px")
-								.style("top", (d3.event.pageY + 20) + "px")
+								.style("top", (d3.event.pageY + 30) + "px")
 								.style("transform", "translate(" +
 									   (-(getToolTipWidth() / 2) + 6) + "px," + // + small, arbitrary amount to make it appear centered under the hand cursor
 									   "0px)");
-
+						}
+					})(wClass))
+					.on("mouseover", (function(closureValue) {
+						return function() {
 							d3.selectAll(".node circle")
 								.transition()
 								.duration(100)
@@ -720,6 +722,18 @@ d3.csv("fighters.csv", function(data) {
 									}
 									else {
 										return "#FFFFFF";
+									}
+								})
+
+							d3.selectAll(".link line")
+								.transition()
+								.duration(100)
+								.style("stroke", function(d) {
+									if(d.source.wClass === closureValue && d.target.wClass === closureValue) {
+										return "#000000";
+									}
+									else {
+										return defaultLinkStroke;
 									}
 								})
 						}
@@ -733,6 +747,11 @@ d3.csv("fighters.csv", function(data) {
 							.transition()
 							.duration(100)
 							.style("stroke", "#FFFFFF")
+
+						d3.selectAll(".link line")
+							.transition()
+							.duration(100)
+							.style("stroke", defaultLinkStroke)
 					})
 					.on("click", (function(closureValue) {
 						return function() {
