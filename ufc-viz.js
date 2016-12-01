@@ -494,7 +494,7 @@ d3.csv("fighters.csv", function(data) {
 					"center",
 					d3.forceCenter()
 						.x(width / 2)
-						.y(labelMargin + (height - labelMargin) / 2)
+						.y((labelMargin + (height - labelMargin)) / 2)
 				)
 				.force(
 					// This force should position the lighter weight clusters to the left and
