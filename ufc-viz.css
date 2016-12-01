@@ -24,3 +24,7 @@
 	background: white;
 	cursor: default;
 }
+
+.fighterLabel {
+    pointer-events: none;
+}

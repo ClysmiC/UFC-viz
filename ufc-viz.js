@@ -423,7 +423,7 @@ d3.csv("fighters.csv", function(data) {
 					"center",
 					d3.forceCenter()
 						.x(width / 2)
-						.y(height / 2)
+						.y(labelMargin + (height - labelMargin) / 2)
 				)
 				.force(
 					// This force should position the lighter weight clusters to the left and
@@ -445,6 +445,11 @@ d3.csv("fighters.csv", function(data) {
 				})
 				.attr("opacity", function(d) {
 					var result = .05 + .95 * (d.count / maxHead2HeadCount);
+					
+					// cache the opacity here. that way when we set it to 0,
+					// we know what to set it back to when it is reappearing
+					d.defaultOpacity = result;
+					
 					return result;
 				});
 
@@ -458,6 +463,10 @@ d3.csv("fighters.csv", function(data) {
 				.attr("r", function(d) {
 					var sparseness = 1 - percentOfFightersVisible;
 					return (1 + 10 * d.winPercent) * (1 + 1 * sparseness);
+				})
+				.attr("id", function(d) {
+					 // storing this as DOM id so we can easily look up a node for a given fighter
+					return "node" + d.id
 				})
 				.attr("fill", function(d) {
 					return color(weightClasses.indexOf(d.wClass));
@@ -475,7 +484,53 @@ d3.csv("fighters.csv", function(data) {
 						.style("top", (d3.event.pageY + 20) + "px");
 					
 					// fade opacity of non-connected fighters
-					// TODO
+					d3.selectAll(".node circle")
+						.transition()
+						.duration(100)
+						.style("opacity", function(d) {
+							if(fighter.id === d.id) {
+								return 1;
+							}
+
+							for(var i = 0; i < fighter.fightList.length; i++) {
+								var opponentId = fighter.fightList[i].opponentId;
+
+								if (opponentId === d.id) {
+									return 1
+								}
+							}
+							
+							return .1;
+						})
+
+					// fade opacity of non-connected links
+					d3.selectAll(".link line")
+						.transition()
+						.duration(100)
+						.style("opacity", function(d) {
+							if(fighter.id === d.source.id ||
+							   fighter.id === d.target.id) {
+								return 1;
+							}
+							
+							return .1;
+						})
+
+					// show name labels of connected fighters
+					d3.selectAll(".fighterLabel")
+						.transition()
+						.duration(100)
+						.style("opacity", function(d) {
+							for(var i = 0; i < fighter.fightList.length; i++) {
+								var opponentId = fighter.fightList[i].opponentId;
+
+								if (opponentId === d.id) {
+									return 1
+								}
+							}
+							
+							return 0;
+						})
 				})
 				.on("mouseout", function(fighter) {
 					// hide tooltip
@@ -483,12 +538,33 @@ d3.csv("fighters.csv", function(data) {
 						.duration(100)
 						.style("opacity", 0);
 					
-					// restore opacity of non-connected fighters
-					// TODO
+					// restore opacity of non-connected fighters and links
+					d3.selectAll(".node circle")
+						.transition()
+						.duration(100)
+						.style("opacity", 1)
+
+					d3.selectAll(".link line")
+						.transition()
+						.duration(100)
+						.style("opacity", function(d) {
+							return d.defaultOpacity;
+						})
+
+					// hide all fighter labels
+					d3.selectAll(".fighterLabel")
+						.transition()
+						.duration(100)
+						.style("opacity", 0)
 				})
 
-			// d3nodes.append("text")
-			// 	.text(function(d) { return d.name });
+			d3nodes.append("text")
+				.text(function(d) { return d.name })
+				.attr("font-family", "Arial")
+				.attr("text-anchor", "middle")
+				.attr("class", "fighterLabel")
+				.attr("opacity", 0)
+				.attr("font-size", 12)
 
 			function ticked() {
 				function clampX(value) { return Math.min(Math.max(value, 50), width - 50); }
@@ -498,9 +574,14 @@ d3.csv("fighters.csv", function(data) {
 					.attr("cx", function(d) { return clampX(d.x); })
 					.attr("cy", function(d) { return clampY(d.y); });
 
-				// d3nodes.selectAll("text")
-				// 	.attr("x", function(d) { return d.x; })
-				// 	.attr("y", function(d) { return d.y; });
+				d3nodes.selectAll(".fighterLabel")
+					.attr("x", function(d) { return clampX(d.x); })
+					.attr("y", function(d, _, textNodeList) {
+						var circle = d3.select("#node" + d.id);
+						var radius = circle.attr("r");
+						var textHeight = textNodeList[0].getBBox().height;
+						return clampY(d.y) + textHeight + parseFloat(radius);
+					});
 
 				d3links
 					.attr("x1", function(d) { return clampX(d.source.x); })
@@ -535,12 +616,6 @@ d3.csv("fighters.csv", function(data) {
 							}
 						}
 					})(wClass))
-					// .attr("stroke-width", 1)
-					// .attr("stroke", (function(closureValue) {
-					// 	return function() {
-							
-					// 	}
-					// })(wClass))
 					.attr("font-family", "Arial")
 					.attr("cursor", "pointer")
 					.text(wClass)
@@ -591,6 +666,5 @@ d3.csv("fighters.csv", function(data) {
 		}
 
 		createInfoViz(getSelectedWeightClasses(), null, null);
-		// createInfoViz(["Lightweight", "Welterweight", "Middleweight"], null, null);
 	});
 });
