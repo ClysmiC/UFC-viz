@@ -116,14 +116,18 @@ function getSvgLabelForFighter(id) {
 // note: tooltip must be rendered before calling this
 // so we can use the tooltip's width/height in our calculations
 function placeTooltip(tooltip) {
+
+	var halfTooltipWidth = getToolTipWidth() / 2;
+	var halfTooltipHeight = getToolTipHeight() / 2;
+	
 	function calculatePositionForFighterTooltip() {
 		var result = { x: 0, y: 0 }
 		
 		var circle = getSvgCircleForFighter(tooltipFocusId);
 		var fighter = fighters[tooltipFocusId];
 
-		var myX = parseFloat(circle.attr("cx"));
-		var myY = parseFloat(circle.attr("cy"));
+		var nodeX = parseFloat(circle.attr("cx"));
+		var nodeY = parseFloat(circle.attr("cy"));
 
 		// add unit vectors of opponents relative positions together
 		// the tooltip will be placed in the opposite direction
@@ -135,8 +139,8 @@ function placeTooltip(tooltip) {
 			var opponentCircle = getSvgCircleForFighter(opponentId);
 
 			if(opponentCircle !== null) {
-				var deltaX = parseFloat(opponentCircle.attr("cx")) - myX;
-				var deltaY = parseFloat(opponentCircle.attr("cy")) - myY;
+				var deltaX = parseFloat(opponentCircle.attr("cx")) - nodeX;
+				var deltaY = parseFloat(opponentCircle.attr("cy")) - nodeY;
 
 				var len = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
 				
@@ -152,8 +156,12 @@ function placeTooltip(tooltip) {
 
 		var tooltipMaxDim = Math.max(getToolTipWidth(), getToolTipHeight());
 
-		result.x = myX - (tooltipMaxDim * .75 * opponentVector.x);
-		result.y = myY - (tooltipMaxDim * .75 * opponentVector.y);
+		result.x = nodeX - (tooltipMaxDim * .75 * opponentVector.x);
+		result.y = nodeY - (tooltipMaxDim * .75 * opponentVector.y);
+
+		
+		result.x = Math.min(Math.max(halfTooltipWidth, result.x), width - halfTooltipWidth);
+		result.y = Math.min(Math.max(halfTooltipHeight, result.y), height - halfTooltipHeight);
 
 		return result;
 	}
@@ -397,6 +405,7 @@ d3.csv("fighters.csv", function(data) {
 			.style("opacity", 0);
 
 		tooltipFocusId = "";
+		selectedFighterId = "";
 
 		// Generate color scheme
 		var color = d3.scaleOrdinal(d3.schemeCategory20);
@@ -502,7 +511,17 @@ d3.csv("fighters.csv", function(data) {
 						.id(function(d) {
 							return d.id;
 						})
-						.distance(75 + 100 * (1 - percentOfFightersVisible))
+						.distance(function(d) {
+							// var dist = 1;
+							// var weightClassDifference = Math.abs(
+							// 	weightClasses.indexOf(d.source.wClass) - weightClasses.indexOf(d.target.wClass));
+							
+							// dist += 2 * weightClassDifference;
+							// dist *= 200 * (1 - percentOfFightersVisible);
+							// return dist;
+
+							return 75 + 150 * (1 - percentOfFightersVisible);
+						})
 				)
 				.force(
 					// This force repels nodes away from each other
@@ -660,6 +679,13 @@ d3.csv("fighters.csv", function(data) {
 						}
 					}
 				})
+				.on("click", function(fighter) {
+					// TODO:
+					// - make all non-selected stuff invisible
+					// - move visible stuff to left half of screen
+					// - zoom in to enlarge it
+					// - create individual graph on right half of screen
+				})
 
 			d3nodes.append("text")
 				.text(function(d) { return d.name })
@@ -736,6 +762,16 @@ d3.csv("fighters.csv", function(data) {
 							}
 							else {
 								return "#aaaaaa";
+							}
+						}
+					})(wClass))
+					.attr("text-decoration", (function(closureValue) {
+						return function() {
+							if(selectedWeightClasses[closureValue]) {
+								return "none";
+							}
+							else {
+								return "line-through";
 							}
 						}
 					})(wClass))
