@@ -103,6 +103,16 @@ function getSvgCircleForFighter(id) {
 	return circle;
 }
 
+function getSvgLabelForFighter(id) {
+	var label = d3.select("#label" + id);
+	
+	if(label.empty()) {
+		return null;
+	}
+
+	return label;
+}
+
 // note: tooltip must be rendered before calling this
 // so we can use the tooltip's width/height in our calculations
 function placeTooltip(tooltip) {
@@ -176,6 +186,18 @@ function inchesToHeightStr(inches) {
 	var in_ = inches % 12;
 
 	return ft + "' " + in_ + '"';
+}
+
+function getOpponentIds(id) {
+	var result = [];
+	var fighter = fighters[id];
+	
+	for(var i = 0; i < fighter.fightList.length; i++) {
+		var opponentId = fighter.fightList[i].opponentId;
+		result.push(opponentId);
+	}
+
+	return result;
 }
 
 
@@ -521,7 +543,7 @@ d3.csv("fighters.csv", function(data) {
 
 			d3nodes = svg.append("g")
 				.attr("class", "node")
-				.selectAll("nodes")
+				.selectAll("node")
 				.data(nodes)
 				.enter().append("g");
 
@@ -556,7 +578,7 @@ d3.csv("fighters.csv", function(data) {
 					
 
 					tooltip.transition()
-						.duration(100)
+						.duration(0)
 						.style("opacity", 1);
 
 					
@@ -594,20 +616,17 @@ d3.csv("fighters.csv", function(data) {
 						})
 
 					// show name labels of connected fighters
-					d3.selectAll(".fighterLabel")
-						.transition()
-						.duration(100)
-						.style("opacity", function(d) {
-							for(var i = 0; i < fighter.fightList.length; i++) {
-								var opponentId = fighter.fightList[i].opponentId;
+					var opponentIds = getOpponentIds(fighter.id);
+					for(var i = 0; i < opponentIds.length; i++) {
+						var label = getSvgLabelForFighter(opponentIds[i]);
 
-								if (opponentId === d.id) {
-									return 1
-								}
-							}
-							
-							return 0;
-						})
+						if(label != null) {
+							label
+								.transition()
+								.duration(100)
+								.style("opacity", 1)
+						}
+					}
 				})
 				.on("mouseout", function(fighter) {
 					// hide tooltip
@@ -629,14 +648,25 @@ d3.csv("fighters.csv", function(data) {
 						.style("opacity", defaultLinkOpacity)
 
 					// hide all fighter labels
-					d3.selectAll(".fighterLabel")
-						.transition()
-						.duration(100)
-						.style("opacity", 0)
+					var opponentIds = getOpponentIds(fighter.id);
+					for(var i = 0; i < opponentIds.length; i++) {
+						var label = getSvgLabelForFighter(opponentIds[i]);
+
+						if(label != null) {
+							label
+								.transition()
+								.duration(100)
+								.style("opacity", 0)
+						}
+					}
 				})
 
 			d3nodes.append("text")
 				.text(function(d) { return d.name })
+				.attr("id", function(d) {
+					 // storing this as DOM id so we can easily look up a node for a given fighter
+					return "label" + d.id
+				})
 				.attr("font-family", "Arial")
 				.attr("text-anchor", "middle")
 				.attr("class", "fighterLabel")
@@ -651,14 +681,26 @@ d3.csv("fighters.csv", function(data) {
 					.attr("cx", function(d) { return clampX(d.x); })
 					.attr("cy", function(d) { return clampY(d.y); });
 
-				d3nodes.selectAll(".fighterLabel")
-					.attr("x", function(d) { return clampX(d.x); })
-					.attr("y", function(d, _, textNodeList) {
-						var circle = getSvgCircleForFighter(d.id);
-						var radius = circle.attr("r");
-						var textHeight = textNodeList[0].getBBox().height;
-						return clampY(d.y) + textHeight + parseFloat(radius);
-					});
+				// I have no clue why, but calculating the positions for the labels
+				// takes an extremely long time, especially after the weight class
+				// filters have been toggled on/off many times.
+				// As a workaround, the positions will ONLY be updated when they are
+				// supposed to be visible anyways
+				if(tooltipFocusId) {
+					var opponentIds = getOpponentIds(tooltipFocusId);
+					for(var i = 0; i < opponentIds.length; i++) {
+						var label = getSvgLabelForFighter(opponentIds[i]);
+
+						if(label != null) {
+							label
+								.attr("x", function(d) { return clampX(d.x); })
+								.attr("y", function(d, _, textNodeList) {
+									var textHeight = textNodeList[0].getBBox().height;
+									return clampY(d.y) + textHeight + 8;
+								});
+						}
+					}
+				}
 
 				d3links
 					.attr("x1", function(d) { return clampX(d.source.x); })
