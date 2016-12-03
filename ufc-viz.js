@@ -57,6 +57,10 @@ var MIN_FIGHT_COUNT = 10;
 var width = window.innerWidth - 100
 var height = window.innerHeight - 10;
 
+var d3nodes;
+var d3links;
+var d3simulation;
+
 // space allocated at top of svg exclusively for the labels
 var labelMargin = 100;
 
@@ -122,6 +126,42 @@ function getSvgLabelForFighter(id) {
 	return label;
 }
 
+// Used to clamp nodes/labels, etc. to within their appropriate limits.
+// Factors in translation, zoom, selection, etc.
+function clampX(value) {
+	var minimum = 50;
+	var maximum = width - 50;
+
+	if(selectedFighterId !== "") {
+		var selectedCircle = getSvgCircleForFighter(selectedFighterId);
+		var selectedX = parseFloat(selectedCircle.attr("cx"));
+		minimum = selectedX - (width / 4) / selectedScale;
+		maximum = selectedX + (width / 4) / selectedScale;
+		
+		minimum += 75 / selectedScale;
+		maximum += 50 / selectedScale;
+	}
+
+	return Math.min(Math.max(value, minimum), maximum);
+	
+}
+function clampY(value) {
+	var minimum = labelMargin;
+	var maximum = height - 50;
+
+	if(selectedFighterId !== "") {
+		var selectedCircle = getSvgCircleForFighter(selectedFighterId);
+		var selectedY = parseFloat(selectedCircle.attr("cy"));
+		minimum = selectedY - (height / 2) / selectedScale;
+		maximum = selectedY + (height / 2) / selectedScale;
+
+		minimum += 50 / selectedScale;
+		maximum += 50 / selectedScale;
+	}
+
+	return Math.min(Math.max(value, minimum), maximum);
+}
+
 function centerOn(id, animate) {
 	if(centeringAnimationOccuring) {
 		return
@@ -146,7 +186,16 @@ function centerOn(id, animate) {
 				  "translate(" + deltaX + "," + deltaY + ")" +
 				  "scale(" + targetScale + " " + targetScale +")"
 				 )
-			.on("end", function() { centeringAnimationOccuring = false; })
+			.on("end", function() {
+				centeringAnimationOccuring = false;
+				
+				// if simulation has ended, we need to restart it since
+				// most of the invisible nodes have been "clamped" to the
+				// sides of our visible area. But if we move towards those
+				// nodes, we want to re-simulate since they might not
+				// get clamped once the view has shifted
+				d3simulation.restart();
+			})
 		
 		centeringAnimationOccuring = true;
 	}
@@ -163,6 +212,76 @@ function centerOn(id, animate) {
 	selectedTranslateX = deltaX;
 	selectedTranslateY = deltaY;
 	selectedScale = targetScale;
+}
+
+// instead of iterating over all labels and hiding them
+// this is more efficient because it knows the id that the
+// visible labels are connected to, and only has to worry about
+// hiding them
+function hideAdjacentLabels(id) {
+	ids = getOpponentIds(id);
+	ids.push(id);
+	
+	for(var i = 0; i < ids.length; i++) {
+		var label = getSvgLabelForFighter(ids[i]);
+
+		if(label != null) {
+			label
+				.style("opacity", 0);
+		}
+	}
+}
+
+// note: this only places it
+// make sure it is shown with showAdjacentLabels
+function placeLabel(id) {
+	var label = getSvgLabelForFighter(id);
+
+	if(label != null) {
+		label
+			.attr("x", function(d) {
+				var circle = getSvgCircleForFighter(d.id);
+				return parseFloat(circle.attr("cx"));
+			})
+			.attr("y", function(d, _, textNodeList) {
+				var circle = getSvgCircleForFighter(d.id);
+				var textHeight = textNodeList[0].getBBox().height;
+				return parseFloat(circle.attr("cy")) + textHeight + 8;
+			});
+	}
+}
+
+function showAdjacentLabels(id, includeSelected) {
+	ids = getOpponentIds(id);
+
+	if(includeSelected) {
+		ids.push(id);
+	}
+	
+	for(var i = 0; i < ids.length; i++) {
+		var label = getSvgLabelForFighter(ids[i]);
+
+		if(label != null) {
+			label
+				.style("opacity", function(d) {
+					if(d.id === id) {
+						return 1;
+					}
+
+					return .6;
+				})
+				.style("font-weight", function(d) {
+					if(d.id === id) {
+						return "bold";
+					}
+
+					return "normal";
+				})
+			
+			placeLabel(ids[i]);
+		}
+
+	}
 }
 
 // note: tooltip must be rendered before calling this
@@ -478,10 +597,6 @@ d3.csv("fighters.csv", function(data) {
 
 		// Generate color scheme
 		var color = d3.scaleOrdinal(d3.schemeCategory20);
-
-		var d3nodes;
-		var d3links;
-		var d3simulation;
 		
 		//
 		// This function completely scratches whatever is currently
@@ -673,14 +788,7 @@ d3.csv("fighters.csv", function(data) {
 					
 						// fade opacity of non-connected fighters
 						d3.selectAll(".node circle")
-							.each( function(d) {
-								var selection = d3.select(this);
-								
-								if(fighter.id !== d.id && !isOpponentOf(d.id, fighter.id)) {
-									selection.classed("nonfocused", true);
-								}
-							})
-								.transition()
+							.transition()
 							.duration(100)
 							.style("opacity", function(d) {
 								if(fighter.id === d.id) {
@@ -700,17 +808,7 @@ d3.csv("fighters.csv", function(data) {
 
 						// fade opacity of non-connected links
 						d3.selectAll(".link line")
-							.each( function(d) {
-								var selection = d3.select(this);
-
-								// fights between direct opponents stay visible
-								// but their opacity is reduced to barely be visible
-								if((fighter.id !== d.source.id && !isOpponentOf(d.source.id, fighter.id)) ||
-								   (fighter.id !== d.target.id && !isOpponentOf(d.target.id, fighter.id))) {
-									selection.classed("nonfocused", true);
-								}
-							})
-								.transition()
+							.transition()
 							.duration(100)
 							.style("opacity", function(d) {
 								if(fighter.id === d.source.id ||
@@ -722,17 +820,7 @@ d3.csv("fighters.csv", function(data) {
 							})
 
 						// show name labels of connected fighters
-						var opponentIds = getOpponentIds(fighter.id);
-						for(var i = 0; i < opponentIds.length; i++) {
-							var label = getSvgLabelForFighter(opponentIds[i]);
-
-							if(label != null) {
-								label
-									.transition()
-									.duration(100)
-									.style("opacity", 1)
-							}
-						}
+						showAdjacentLabels(fighter.id, false);
 					}
 				})
 				.on("mouseout", function(fighter) {
@@ -746,13 +834,11 @@ d3.csv("fighters.csv", function(data) {
 					if(selectedFighterId === "") {
 						// restore opacity of non-connected fighters and links
 						d3.selectAll(".node circle")
-							.classed("nonfocused", false)
 							.transition()
 							.duration(100)
 							.style("opacity", 1)
 
 						d3.selectAll(".link line")
-							.classed("nonfocused", false)
 							.transition()
 							.duration(100)
 							.style("opacity", defaultLinkOpacity)
@@ -773,23 +859,53 @@ d3.csv("fighters.csv", function(data) {
 
 				})
 				.on("click", function(fighter) {
+					// hide old selection
+					if(selectedFighterId !== "") {
+						hideAdjacentLabels(selectedFighterId);
+					}
+					
 					selectedFighterId = fighter.id;
 					
 					// set tooltip to invisible
 					tooltip
 						.style("opacity", 0)
 
-					// show the label for the fighter (previously hidden because we had the tooltip)
-					var label = getSvgLabelForFighter(fighter.id);
-					label
-						.style("opacity", 1)
-						.style("font-weight", "bold")
+					showAdjacentLabels(fighter.id, true);
 					
 					// make all non-selected stuff invisible
-					// center the selected fighter
-					d3.selectAll(".nonfocused")
-						.style("opacity", 0)
+					d3.selectAll(".node circle")
+						.style("opacity", function(d) {
+							if(fighter.id === d.id) {
+								return 1;
+							}
 
+							for(var i = 0; i < fighter.fightList.length; i++) {
+								var opponentId = fighter.fightList[i].opponentId;
+
+								if (opponentId === d.id) {
+									return 1
+								}
+							}
+							
+							return 0;
+						})
+
+					// fade opacity of non-connected links
+					d3.selectAll(".link line")
+						.style("opacity", function(d) {
+							if(fighter.id === d.source.id ||
+							   fighter.id === d.target.id) {
+								return 1;
+							}
+
+							if(isOpponentOf(d.source.id, fighter.id) &&
+							   isOpponentOf(d.target.id, fighter.id)) {
+								return .1;
+							}
+							
+							return 0;
+						})
+					
 					centerOn(fighter.id, true);
 					
 
@@ -817,39 +933,6 @@ d3.csv("fighters.csv", function(data) {
 				.attr("font-size", 12)
 
 			function ticked() {
-				function clampX(value) {
-					var minimum = 50;
-					var maximum = width - 50;
-
-					if(selectedFighterId !== "") {
-						var selectedCircle = getSvgCircleForFighter(selectedFighterId);
-						var selectedX = parseFloat(selectedCircle.attr("cx"));
-						minimum = selectedX - (width / 4) / selectedScale;
-						maximum = selectedX + (width / 4) / selectedScale;
-						
-						minimum += 75 / selectedScale;
-						maximum += 50 / selectedScale;
-					}
-
-					return Math.min(Math.max(value, minimum), maximum);
-					
-				}
-				function clampY(value) {
-					var minimum = labelMargin;
-					var maximum = height - 50;
-
-					if(selectedFighterId !== "") {
-						var selectedCircle = getSvgCircleForFighter(selectedFighterId);
-						var selectedY = parseFloat(selectedCircle.attr("cy"));
-						minimum = selectedY - (height / 2) / selectedScale;
-						maximum = selectedY + (height / 2) / selectedScale;
-
-						minimum += 50 / selectedScale;
-						maximum += 50 / selectedScale;
-					}
-
-					return Math.min(Math.max(value, minimum), maximum);
-				}
 				
 				if(selectedFighterId !== "") {
 					centerOn(selectedFighterId, false);
@@ -877,16 +960,7 @@ d3.csv("fighters.csv", function(data) {
 					}
 					
 					for(var i = 0; i < opponentIds.length; i++) {
-						var label = getSvgLabelForFighter(opponentIds[i]);
-
-						if(label != null) {
-							label
-								.attr("x", function(d) { return clampX(d.x); })
-								.attr("y", function(d, _, textNodeList) {
-									var textHeight = textNodeList[0].getBBox().height;
-									return clampY(d.y) + textHeight + 8;
-								});
-						}
+						placeLabel(opponentIds[i]);
 					}
 				}
 
