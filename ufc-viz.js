@@ -277,6 +277,13 @@ function showAdjacentLabels(id, includeSelected) {
 
 					return "normal";
 				})
+				.style("font-size", function(d) {
+					if(d.id === id) {
+						return 12;
+					}
+
+					return 12 / selectedScale;
+				})
 			
 			placeLabel(ids[i]);
 		}
@@ -869,8 +876,6 @@ d3.csv("fighters.csv", function(data) {
 					// set tooltip to invisible
 					tooltip
 						.style("opacity", 0)
-
-					showAdjacentLabels(fighter.id, true);
 					
 					// make all non-selected stuff invisible
 					d3.selectAll(".node circle")
@@ -907,7 +912,7 @@ d3.csv("fighters.csv", function(data) {
 						})
 					
 					centerOn(fighter.id, true);
-					
+					showAdjacentLabels(fighter.id, true);					
 
 					// hide weight labels
 					d3.selectAll(".weightLabel")

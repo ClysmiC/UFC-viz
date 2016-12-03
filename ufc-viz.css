@@ -1,6 +1,7 @@
 .node circle {
   stroke: #ffffff;
   stroke-width: 2px;
+  cursor: pointer;
 }
 
 .chart {
