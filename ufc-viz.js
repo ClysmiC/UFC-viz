@@ -917,12 +917,6 @@ d3.csv("fighters.csv", function(data) {
 					// hide weight labels
 					d3.selectAll(".weightLabel")
 						.style("visibility", "hidden")
-					
-					// - zoom in to enlarge it
-					// d3.selectAll(".node, .link")
-					// 	.transition(500)
-					// 	.attr("transform", "scale(2, 2)")
-					// - create individual graph on right half of screen
 				})
 
 			d3nodes.append("text")
@@ -1033,8 +1027,7 @@ d3.csv("fighters.csv", function(data) {
 								.style("left", (d3.event.pageX) + "px")
 								.style("top", (d3.event.pageY + 30) + "px")
 								.style("transform", "translate(" +
-									   (-(getToolTipWidth() / 2) + 6) + "," + // + small, arbitrary amount to make it appear centered under the hand cursor
-									   ")");
+									   (-(getToolTipWidth() / 2) + 6) + "px, 0px)");
 						}
 					})(wClass))
 					.on("mouseover", (function(closureValue) {
