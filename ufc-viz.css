@@ -28,3 +28,9 @@
 .fighterLabel {
     pointer-events: none;
 }
+
+.weightLabel {
+	cursor: pointer;
+	font-family: Arial;
+}
+
