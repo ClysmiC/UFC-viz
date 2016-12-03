@@ -168,7 +168,13 @@ function centerOn(id, animate) {
 // note: tooltip must be rendered before calling this
 // so we can use the tooltip's width/height in our calculations
 function placeTooltip(tooltip) {
-
+	// disallow tooltip when fighter has been selected
+	// the math for placing it correctly gets hairy,
+	// and the in-depth info will be on the right hand side anyway
+	if(selectedFighterId !== "") {
+		return;
+	}
+	
 	var halfTooltipWidth = getToolTipWidth() / 2;
 	var halfTooltipHeight = getToolTipHeight() / 2;
 	
@@ -180,12 +186,6 @@ function placeTooltip(tooltip) {
 
 		var nodeX = parseFloat(circle.attr("cx"));
 		var nodeY = parseFloat(circle.attr("cy"));
-
-		// nodeX *= selectedScale;
-		// nodeX += selectedTranslateX;
-
-		// nodeY *= selectedScale;
-		// nodeY += selectedTranslateY;
 
 		// add unit vectors of opponents relative positions together
 		// the tooltip will be placed in the opposite direction
@@ -216,13 +216,9 @@ function placeTooltip(tooltip) {
 
 		result.x = nodeX - (tooltipMaxDim * .75 * opponentVector.x);
 		result.y = nodeY - (tooltipMaxDim * .75 * opponentVector.y);
-
-		// shift tooltip if the graph has been translated (when node is selected)
-		result.x += selectedTranslateX;
-		result.y += selectedTranslateY;
 		
-		// result.x = Math.min(Math.max(halfTooltipWidth, result.x), width - halfTooltipWidth);
-		// result.y = Math.min(Math.max(halfTooltipHeight, result.y), height - halfTooltipHeight);
+		result.x = Math.min(Math.max(halfTooltipWidth, result.x), width - halfTooltipWidth);
+		result.y = Math.min(Math.max(halfTooltipHeight, result.y), height - halfTooltipHeight);
 
 		return result;
 	}
@@ -652,30 +648,30 @@ d3.csv("fighters.csv", function(data) {
 					return color(weightClasses.indexOf(d.wClass));
 				})
 				.on("mouseover", function(fighter) {
-					// Create tooltip
-					htmlString = "<b>" + fighter.name + "</b>";
-					htmlString += "<hr>";
-					htmlString += fighter.wClass;
-					htmlString += "<br>";
-					htmlString += inchesToHeightStr(fighter.height) + " " + fighter.weight + " lbs";
-					htmlString += "<br>";
-					htmlString += fighter.wins + " - " + fighter.losses + " - " + fighter.draws;
-					htmlString += "<br>";
-					htmlString += "Win %: " + (fighter.winPercent * 100).toFixed(2);
-
-					tooltipFocusId = fighter.id;
-
-					tooltip.html(htmlString);
-					placeTooltip(tooltip);
-					
-
-					tooltip.transition()
-						.duration(0)
-						.style("opacity", 1);
-
-					
-					// fade opacity of non-connected fighters
 					if(selectedFighterId === "") {
+						// Create tooltip
+						htmlString = "<b>" + fighter.name + "</b>";
+						htmlString += "<hr>";
+						htmlString += fighter.wClass;
+						htmlString += "<br>";
+						htmlString += inchesToHeightStr(fighter.height) + " " + fighter.weight + " lbs";
+						htmlString += "<br>";
+						htmlString += fighter.wins + " - " + fighter.losses + " - " + fighter.draws;
+						htmlString += "<br>";
+						htmlString += "Win %: " + (fighter.winPercent * 100).toFixed(2);
+
+						tooltipFocusId = fighter.id;
+
+						tooltip.html(htmlString);
+						placeTooltip(tooltip);
+						
+
+						tooltip.transition()
+							.duration(0)
+							.style("opacity", 1);
+
+					
+						// fade opacity of non-connected fighters
 						d3.selectAll(".node circle")
 							.each( function(d) {
 								var selection = d3.select(this);
@@ -777,21 +773,25 @@ d3.csv("fighters.csv", function(data) {
 
 				})
 				.on("click", function(fighter) {
-					// TODO:
-
 					selectedFighterId = fighter.id;
-					
-					// make all non-selected stuff invisible
-					d3.selectAll(".nonfocused")
-						.transition()
-						.duration(100)
-						.style("opacity", 0)
-
-					centerOn(fighter.id, true);
 					
 					// set tooltip to invisible
 					tooltip
 						.style("opacity", 0)
+
+					// show the label for the fighter (previously hidden because we had the tooltip)
+					var label = getSvgLabelForFighter(fighter.id);
+					label
+						.style("opacity", 1)
+						.style("font-weight", "bold")
+					
+					// make all non-selected stuff invisible
+					// center the selected fighter
+					d3.selectAll(".nonfocused")
+						.style("opacity", 0)
+
+					centerOn(fighter.id, true);
+					
 
 					// hide weight labels
 					d3.selectAll(".weightLabel")
@@ -827,7 +827,7 @@ d3.csv("fighters.csv", function(data) {
 						minimum = selectedX - (width / 4) / selectedScale;
 						maximum = selectedX + (width / 4) / selectedScale;
 						
-						minimum += 50 / selectedScale;
+						minimum += 75 / selectedScale;
 						maximum += 50 / selectedScale;
 					}
 
@@ -870,6 +870,7 @@ d3.csv("fighters.csv", function(data) {
 					
 					if(selectedFighterId !== "") {
 						opponentIds = getOpponentIds(selectedFighterId);
+						opponentIds.push(selectedFighterId); // hack: display the selected fighter too
 					}
 					else {
 						opponentIds = getOpponentIds(tooltipFocusId);
