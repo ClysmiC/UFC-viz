@@ -442,23 +442,34 @@ d3.csv("fighters.csv", function(data) {
 			var name2 = fight["f2name"];
 			var result1 = fight["f1result"];
 			var result2 = fight["f2result"];
+			var method = fight["method"];
+			var date = fight["event_date"].split("/");
+
+			var year = parseInt(date[2]);
+			var day = parseInt(date[1]);
+			var month = parseInt(date[0]);
+			date = new Date(year, month - 1, day); // why are months 0-11... wtf javascript
 			
 			if(id1 in fighters && id2 in fighters) {
 				if(result1 == "win" || result1 == "loss" || result1 == "draw")
 				{
 					fighters[id1].fightList.push(
 						{
+							date: date,
 							opponentName: name2,
 							opponentId: id2,
-							result: result1
+							result: result1,
+							method: method
 						}
 					);
 
 					fighters[id2].fightList.push(
 						{
+							date: date,
 							opponentName: name1,
 							opponentId: id1,
-							result: result2
+							result: result2,
+							method: method
 						}
 					);
 				}
@@ -738,7 +749,7 @@ d3.csv("fighters.csv", function(data) {
 					})
 				);
 
-			var d3links = svg.append("g")
+			d3links = svg.append("g")
 				.attr("class", "link")
 				.selectAll("line")
 				.data(links)
@@ -894,6 +905,29 @@ d3.csv("fighters.csv", function(data) {
 							
 							return 0;
 						})
+						.each(function(d) {
+							var selection = d3.select(this);
+							
+							if(fighter.id === d.id) {
+								selection.classed("unselected", false);
+								selection.classed("selected", true);
+								return;
+							}
+
+							for(var i = 0; i < fighter.fightList.length; i++) {
+								var opponentId = fighter.fightList[i].opponentId;
+
+								if (opponentId === d.id) {
+									selection.classed("unselected", false);
+									selection.classed("selected", true);
+									return;
+								}
+							}
+
+							selection.classed("unselected", true);
+							selection.classed("selected", false);
+							return;
+						})
 
 					// fade opacity of non-connected links
 					d3.selectAll(".link line")
@@ -910,13 +944,104 @@ d3.csv("fighters.csv", function(data) {
 							
 							return 0;
 						})
-					
+						.each(function(d) {
+							var selection = d3.select(this);
+							
+							if(fighter.id === d.source.id ||
+							   fighter.id === d.target.id) {
+								selection.classed("unselected", false);
+								selection.classed("selected", true);
+							}
+
+							if(isOpponentOf(d.source.id, fighter.id) &&
+							   isOpponentOf(d.target.id, fighter.id)) {
+								selection.classed("unselected", false);
+								selection.classed("selected", true);
+							}
+							
+							selection.classed("unselected", true);
+							selection.classed("selected", false);
+						})
+
+					d3.selectAll(".unselected")
+						.attr("cursor", "default")
+						.attr("pointer-events", "none")
+
+					d3.selectAll(".selected")
+						.attr("cursor", "pointer")
+						.attr("pointer-events", "auto")
+
+					// Center on fighter and show labels
 					centerOn(fighter.id, true);
 					showAdjacentLabels(fighter.id, true);					
 
 					// hide weight labels
 					d3.selectAll(".weightLabel")
 						.style("visibility", "hidden")
+
+					// TODO
+					// Create chart for the selected fighter
+					var minDate = fighter.fightList[0].date;
+					var maxDate = fighter.fightList[0].date;
+
+					for(var i = 1; i < fighter.fightList.length; i++) {
+						var fight = fighter.fightList[i];
+						minDate = Math.min(minDate, fight.date);
+						maxDate = Math.max(maxDate, fight.date);
+					}
+
+					// re-cast to Date, b/c min/max return raw integer form
+					minDate = new Date(minDate);
+					maxDate = new Date(maxDate);
+
+					var chartX = width / 2 + 50; //start of chart
+					var chartY = labelMargin;
+					
+					var chartWidth = width - chartX - 50;
+					var chartHeight = height - chartY - labelMargin;
+					
+					var xScale = d3.scaleTime()
+						.domain([minDate, maxDate])
+						.range([chartX, chartX + chartWidth])
+
+					var roundValues = [-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5];
+					var yScale = d3.scaleOrdinal()
+						.domain(roundValues)
+						.range(roundValues.map(
+							function(d) {
+								var bot = chartY + chartHeight;
+								var top = chartY;
+
+								// linear interpolate
+								return bot + (top - bot) * (d + 5) / roundValues.length;
+							})
+						);
+
+					var xAxis = d3.axisBottom()
+						.scale(xScale)
+						.tickSizeOuter(0);
+					
+					var yAxis = d3.axisLeft()
+						.scale(yScale)
+						.tickValues(roundValues)
+
+					var d3Axes = svg.append("g");
+					d3Axes.append("g").attr("class", "xAxis");
+					d3Axes.append("g").attr("class", "yAxis");
+					
+					var d3Chart = svg.append("g")
+						.attr("class", "fighterChart")
+						.selectAll("fighterChart")
+						.data(fighter.fightList)
+						.enter().append("g");
+
+					svg.select(".xAxis")
+						.attr("transform", "translate(0, " + (chartY + chartHeight / 2) + ")")
+						.call(xAxis);
+
+					svg.select(".yAxis")
+						.attr("transform", "translate(" + (chartX - 10) + ", 0)")
+						.call(yAxis);
 				})
 
 			d3nodes.append("text")
