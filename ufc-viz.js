@@ -219,6 +219,22 @@ function getSelectedWeightClasses() {
 	return selection;
 }
 
+function getTooltipHTMLForFighter(id) {
+	var fighter = fighters[id];
+	
+	var htmlString = "<b>" + fighter.name + "</b>";
+	htmlString += "<hr>";
+	htmlString += fighter.wClass;
+	htmlString += "<br>";
+	htmlString += inchesToHeightStr(fighter.height) + " " + fighter.weight + " lbs";
+	htmlString += "<br>";
+	htmlString += fighter.wins + " - " + fighter.losses + " - " + fighter.draws;
+	htmlString += "<br>";
+	htmlString += "Win %: " + (fighter.winPercent * 100).toFixed(2);
+
+	return htmlString;
+}
+
 function getSvgCircleForFighter(id) {
 	var circle = d3.select("#node" + id);
 	
@@ -411,7 +427,23 @@ function showAdjacentLabels(id, includeSelected) {
 
 // note: tooltip must be rendered before calling this
 // so we can use the tooltip's width/height in our calculations
-function placeTooltip(tooltip) {	
+function placeFightTooltip(smallTooltip, svgCircle) {
+	var tooltipCenterX = parseFloat(svgCircle.attr("cx"));
+	var tooltipCenterY = parseFloat(svgCircle.attr("cy"));
+	
+	var svgPos = document.getElementById("theSvg").getBoundingClientRect();
+	
+	smallTooltip
+		.style("left", (svgPos.left + tooltipCenterX) + "px")
+		.style("top", (svgPos.top + tooltipCenterY + 64) + "px")
+		.style("transform", "translate(" +
+			   -getSmallToolTipWidth() / 2 + "px," +
+			   -getSmallToolTipHeight() / 2 + "px)")
+}
+
+// note: tooltip must be rendered before calling this
+// so we can use the tooltip's width/height in our calculations
+function placeFighterTooltip(tooltip) {	
 	var halfTooltipWidth = getToolTipWidth() / 2;
 	var halfTooltipHeight = getToolTipHeight() / 2;
 	
@@ -473,11 +505,19 @@ function placeTooltip(tooltip) {
 }
 
 function getToolTipWidth() {
-	return d3.select(".tooltip").node().getBoundingClientRect().width;
+	return d3.select(".largeTooltip").node().getBoundingClientRect().width;
 }
 
 function getToolTipHeight() {
-	return d3.select(".tooltip").node().getBoundingClientRect().height;
+	return d3.select(".largeTooltip").node().getBoundingClientRect().height;
+}
+
+function getSmallToolTipWidth() {
+	return d3.select(".smallTooltip").node().getBoundingClientRect().width;
+}
+
+function getSmallToolTipHeight() {
+	return d3.select(".smallTooltip").node().getBoundingClientRect().height;
 }
 
 // example: 68 -> 5' 8"
@@ -555,7 +595,7 @@ d3.csv("fighters.csv", function(data) {
 			var name2 = fight["f2name"];
 			var result1 = fight["f1result"];
 			var result2 = fight["f2result"];
-			var method = fight["method"];
+			var method = fight["method"].toLowerCase();
 			var round = fight["round"];
 			var date = fight["event_date"].split("/");
 
@@ -728,8 +768,15 @@ d3.csv("fighters.csv", function(data) {
 			.attr("id", "theSvg");
 
 		var tooltip = d3.select(".chart").append("div");
-		tooltip.attr("class", "tooltip")
+		tooltip
+			.classed("tooltip", true)
+			.classed("largeTooltip", true)
 			.style("opacity", 0);
+
+		var smallTooltip = d3.select(".chart").append("div");
+		smallTooltip
+			.classed("tooltip", true)
+			.classed("smallTooltip", true)
 		
 		// Generate color scheme
 		var color = d3.scaleOrdinal(d3.schemeCategory20);
@@ -908,20 +955,12 @@ d3.csv("fighters.csv", function(data) {
 				})
 				.on("mouseover", function(fighter) {
 					// Create tooltip
-					htmlString = "<b>" + fighter.name + "</b>";
-					htmlString += "<hr>";
-					htmlString += fighter.wClass;
-					htmlString += "<br>";
-					htmlString += inchesToHeightStr(fighter.height) + " " + fighter.weight + " lbs";
-					htmlString += "<br>";
-					htmlString += fighter.wins + " - " + fighter.losses + " - " + fighter.draws;
-					htmlString += "<br>";
-					htmlString += "Win %: " + (fighter.winPercent * 100).toFixed(2);
+					var htmlString = getTooltipHTMLForFighter(fighter.id);
 
 					tooltipFocusId = fighter.id;
 
 					tooltip.html(htmlString);
-					placeTooltip(tooltip);
+					placeFighterTooltip(tooltip);
 					
 
 					tooltip.transition()
@@ -1327,6 +1366,60 @@ d3.csv("fighters.csv", function(data) {
 
 							return color;
 						})
+						.on("mouseover", function(d) {
+							var selection = d3.select(this);
+							selection
+								.attr("stroke", "#000000");
+							
+							var winner = (d.result === "win") ? fighter.name : (d.result === "loss") ? d.opponentName : "draw";
+							var nameString = "";
+							var resultString = "";
+							
+							// Create tooltip
+							if(d.result === "win") {
+								nameString = "<b><u>" + fighter.name + "</u> vs. " + d.opponentName + "</b>";
+								resultString += "Win by " + d.method + " (" + d.round + " rounds)";
+							}
+							else if (d.result === "loss") {
+								nameString = "<b>" + fighter.name + " vs. <u>" + d.opponentName + "</u></b>";
+								resultString += "Loss by " + d.method + " (" + d.round + " rounds)";
+							}
+							else {
+								nameString = "<b>" + fighter.name + " vs. " + d.opponentName + "</b>";
+								resultString += "Draw (" + d.round + " round(s))";
+							}
+
+							var dateString = d.date.toISOString().slice(0, 10);
+							
+							var htmlString = nameString;
+							htmlString += "<hr>";
+							htmlString += "Date: " + dateString;
+							htmlString += "<br>";
+							htmlString += resultString;
+
+							var leftString = getTooltipHTMLForFighter(fighter.id);
+							var rightString = getTooltipHTMLForFighter(d.opponentId);
+
+							htmlString += "<hr>"
+							htmlString += "<table class='ttTable'><tr><td>" + leftString + "</td><td>" + rightString + "</td></tr></table>";
+							
+							smallTooltip.html(htmlString);
+							placeFightTooltip(smallTooltip, selection);
+							
+
+							smallTooltip.transition()
+								.duration(0)
+								.style("opacity", 1);
+						})
+						.on("mouseout", function(d) {
+							var selection = d3.select(this);
+							selection
+								.attr("stroke", d.defaultStroke);
+							
+							smallTooltip.transition()
+								.duration(100)
+								.style("opacity", 0);
+						})
 				})
 
 			d3nodes.append("text")
@@ -1380,7 +1473,7 @@ d3.csv("fighters.csv", function(data) {
 					.attr("y2", function(d) { return clampY(d.target.y); });
 
 				if(tooltipFocusId !== "" && selectedFighterId !== "") {
-					placeTooltip(tooltip);
+					placeFighterTooltip(tooltip);
 				}
 			}
 
