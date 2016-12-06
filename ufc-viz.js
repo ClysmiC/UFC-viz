@@ -459,7 +459,8 @@ d3.csv("fighters.csv", function(data) {
 							opponentId: id2,
 							result: result1,
 							round: round,
-							method: method
+							method: method,
+							opponentWClass: fighters[id2].wClass
 						}
 					);
 
@@ -470,7 +471,8 @@ d3.csv("fighters.csv", function(data) {
 							opponentId: id1,
 							result: result2,
 							round: round,
-							method: method
+							method: method,
+							opponentWClass: fighters[id1].wClass
 						}
 					);
 				}
@@ -1196,13 +1198,19 @@ d3.csv("fighters.csv", function(data) {
 						.attr("stroke", function(d) {
 							var selection = d3.select(this);
 							
+							var color;
 							if(d.opponentId in fighters) {
-								var fill = selection.attr("fill");
-								return fill.replace("b", "9");
+								color = selection.attr("fill");
+								color = color.replace("b", "9");
 							}
 							else {
-								return "#999999";
+								color = "#999999";
 							}
+
+							// cache
+							d.defaultStroke = color;
+
+							return color;
 						})
 				})
 
@@ -1342,6 +1350,17 @@ d3.csv("fighters.csv", function(data) {
 										return defaultLinkStroke;
 									}
 								})
+
+							d3.selectAll(".fightDot")
+								.transition()
+								.duration(100)
+								.style("stroke", function(d) {
+									if(d.opponentWClass === closureValue) {
+										return "#000000";
+									}
+									
+									return d.defaultStroke;
+								})
 						}
 					})(wClass))
 					.on("mouseout", function() {
@@ -1358,6 +1377,13 @@ d3.csv("fighters.csv", function(data) {
 							.transition()
 							.duration(100)
 							.style("stroke", defaultLinkStroke)
+
+						d3.selectAll(".fightDot")
+							.transition()
+							.duration(100)
+							.style("stroke", function(d) {
+								return d.defaultStroke;
+							})
 					})
 					.on("click", (function(closureValue) {
 						return function() {
