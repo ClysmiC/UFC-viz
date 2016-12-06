@@ -461,10 +461,12 @@ function placeTooltip(tooltip) {
 	}
 	
 	var tooltipCenter = calculatePositionForFighterTooltip();
-	
+
+	var svgPos = document.getElementById("theSvg").getBoundingClientRect();
+						
 	tooltip
-		.style("left", (tooltipCenter.x) + "px")
-		.style("top", (tooltipCenter.y) + "px")
+		.style("left", svgPos.left + (tooltipCenter.x) + "px")
+		.style("top", svgPos.top + (tooltipCenter.y) + "px")
 		.style("transform", "translate(" +
 			   -getToolTipWidth() / 2 + "px," +
 			   -getToolTipHeight() / 2 + "px)")
@@ -722,7 +724,8 @@ d3.csv("fighters.csv", function(data) {
 		var svg = d3.select(".chart").append("svg")
 			.attr("width", width)
 			.attr("height", height)
-			.attr("class", "svg");
+			.attr("class", "svg")
+			.attr("id", "theSvg");
 
 		var tooltip = d3.select(".chart").append("div");
 		tooltip.attr("class", "tooltip")

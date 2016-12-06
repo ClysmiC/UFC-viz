@@ -9,6 +9,10 @@
 	cursor: pointer;
 }
 
+.fightStem {
+	stroke-width: 2px;
+}
+
 .chart {
 	margin: 0 auto;
 }
