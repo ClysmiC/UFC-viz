@@ -298,14 +298,7 @@ function showAdjacentLabels(id, includeSelected) {
 
 // note: tooltip must be rendered before calling this
 // so we can use the tooltip's width/height in our calculations
-function placeTooltip(tooltip) {
-	// disallow tooltip when fighter has been selected
-	// the math for placing it correctly gets hairy,
-	// and the in-depth info will be on the right hand side anyway
-	if(selectedFighterId !== "") {
-		return;
-	}
-	
+function placeTooltip(tooltip) {	
 	var halfTooltipWidth = getToolTipWidth() / 2;
 	var halfTooltipHeight = getToolTipHeight() / 2;
 	
@@ -315,8 +308,8 @@ function placeTooltip(tooltip) {
 		var circle = getSvgCircleForFighter(tooltipFocusId);
 		var fighter = fighters[tooltipFocusId];
 
-		var nodeX = parseFloat(circle.attr("cx"));
-		var nodeY = parseFloat(circle.attr("cy"));
+		var nodeX = parseFloat(circle.attr("cx")) * selectedScale + selectedTranslateX;
+		var nodeY = parseFloat(circle.attr("cy")) * selectedScale + selectedTranslateY;
 
 		// add unit vectors of opponents relative positions together
 		// the tooltip will be placed in the opposite direction
@@ -636,10 +629,16 @@ d3.csv("fighters.csv", function(data) {
 			// the infoviz. createInfoViz should only be called directly the first
 			// time the infoviz gets generated.
 			function regenerateInfoViz(wClasses) {											
+				selectedFighterId = "";
+				tooltipFocusId = "";
 
-				// not 100% how this is working but it is clearing out all
-				// the data that already exists so the graph can rebuild
-				// without any memory leaks
+				selectedTranslateX = 0;
+				selectedTranslateY = 0;
+				selectedScale = 1;
+
+				d3.select(".fighterChart")
+					.remove()
+				
 				if(d3nodes != null) {
 					d3nodes = d3nodes.data([])
 					d3nodes.exit().remove();
@@ -789,29 +788,29 @@ d3.csv("fighters.csv", function(data) {
 					return color(weightClasses.indexOf(d.wClass));
 				})
 				.on("mouseover", function(fighter) {
-					if(selectedFighterId === "") {
-						// Create tooltip
-						htmlString = "<b>" + fighter.name + "</b>";
-						htmlString += "<hr>";
-						htmlString += fighter.wClass;
-						htmlString += "<br>";
-						htmlString += inchesToHeightStr(fighter.height) + " " + fighter.weight + " lbs";
-						htmlString += "<br>";
-						htmlString += fighter.wins + " - " + fighter.losses + " - " + fighter.draws;
-						htmlString += "<br>";
-						htmlString += "Win %: " + (fighter.winPercent * 100).toFixed(2);
+					// Create tooltip
+					htmlString = "<b>" + fighter.name + "</b>";
+					htmlString += "<hr>";
+					htmlString += fighter.wClass;
+					htmlString += "<br>";
+					htmlString += inchesToHeightStr(fighter.height) + " " + fighter.weight + " lbs";
+					htmlString += "<br>";
+					htmlString += fighter.wins + " - " + fighter.losses + " - " + fighter.draws;
+					htmlString += "<br>";
+					htmlString += "Win %: " + (fighter.winPercent * 100).toFixed(2);
 
-						tooltipFocusId = fighter.id;
+					tooltipFocusId = fighter.id;
 
-						tooltip.html(htmlString);
-						placeTooltip(tooltip);
-						
+					tooltip.html(htmlString);
+					placeTooltip(tooltip);
+					
 
-						tooltip.transition()
-							.duration(0)
-							.style("opacity", 1);
+					tooltip.transition()
+						.duration(0)
+						.style("opacity", 1);
 
 					
+					if(selectedFighterId === "") {
 						// fade opacity of non-connected fighters
 						d3.selectAll(".node circle")
 							.transition()
@@ -983,11 +982,6 @@ d3.csv("fighters.csv", function(data) {
 					centerOn(fighter.id, true);
 					showAdjacentLabels(fighter.id, true);					
 
-					// hide weight labels
-					d3.selectAll(".weightLabel")
-						.style("visibility", "hidden")
-
-					// TODO
 					// Create chart for the selected fighter
 					var minDate = fighter.fightList[0].date;
 					var maxDate = fighter.fightList[0].date;
@@ -1003,7 +997,7 @@ d3.csv("fighters.csv", function(data) {
 					maxDate = new Date(maxDate);
 
 					var chartX = width / 2 + 100; //start of chart
-					var chartY = labelMargin;
+					var chartY = labelMargin * 1.5;
 					
 					var chartWidth = width - chartX - 50;
 					var chartHeight = height - chartY - labelMargin;
