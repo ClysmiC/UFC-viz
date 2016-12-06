@@ -76,7 +76,12 @@
 }
 
 #search {
-	float: right;
-	margin-right: 50px;
-	margin-bot: 10px;
+	display: inline-block;
+	position: absolute;
+	right: 50px;
+}
+
+#mfc {
+	font-style: normal;
+	font-weight: bold;
 }

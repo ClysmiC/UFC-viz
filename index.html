@@ -13,15 +13,15 @@
 	  <div id="header" class="arialText">
 		<h3 id="title">UFC Matchups Visualized</h3>
 		<div>
-		  <p id="subtitle" class="arialText">Includes fighters with >= ### recorded fights
+		  <span id="search">
+			<input id="searchName" type="text" placeholder="Search By Name">
+			<button id="searchSubmit" type="button">Search</button>
+		  </span>
+		  
+		  <p id="subtitle" class="arialText">Includes fighters with >= <span id='mfc'>[count]</span> recorded fights
 		  	<span>
 			  <button id="plus" type="button">+</button>
 			  <button id="minus" type="button">-</button>
-			</span>
-
-			<span id="search">
-			  <input id="searchName" type="text" placeholder="Search By Name">
-			  <button id="searchSubmit" type="button">Search</button>
 			</span>
 		  </p>
 		</div>

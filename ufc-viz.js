@@ -35,17 +35,17 @@ var weightClasses = ["Atomweight", "Strawweight", "Flyweight",
 // that class has > 0 fighters. Then, the user can toggle
 // by clicking on the labels
 var selectedWeightClasses = {}
-selectedWeightClasses["Atomweight"] = false;
-selectedWeightClasses["Strawweight"] = false;
-selectedWeightClasses["Flyweight"] = false;
-selectedWeightClasses["Bantamweight"] = false;
-selectedWeightClasses["Featherweight"] = false;
-selectedWeightClasses["Lightweight"] = false;
-selectedWeightClasses["Welterweight"] = false;
-selectedWeightClasses["Middleweight"] = false;
-selectedWeightClasses["Light Heavyweight"] = false;
-selectedWeightClasses["Heavyweight"] = false;
-selectedWeightClasses["Super Heavyweight"] = false;
+selectedWeightClasses["Atomweight"] = true;
+selectedWeightClasses["Strawweight"] = true;
+selectedWeightClasses["Flyweight"] = true;
+selectedWeightClasses["Bantamweight"] = true;
+selectedWeightClasses["Featherweight"] = true;
+selectedWeightClasses["Lightweight"] = true;
+selectedWeightClasses["Welterweight"] = true;
+selectedWeightClasses["Middleweight"] = true;
+selectedWeightClasses["Light Heavyweight"] = true;
+selectedWeightClasses["Heavyweight"] = true;
+selectedWeightClasses["Super Heavyweight"] = true;
 
 var weightDescriptions = {};
 weightDescriptions["Atomweight"] = "<105 lb (women only)";
@@ -60,9 +60,10 @@ weightDescriptions["Light Heavyweight"] = "185-205 lb";
 weightDescriptions["Heavyweight"] = "205-265 lb";
 weightDescriptions["Super Heavyweight"] = ">265 lb";
 
+var createInfoViz; // function
+
 // fighters with less than this number of fights aren't shown on the network
 var minFightCount = 10;
-
 
 // svg dimensions
 var width = window.innerWidth - 100
@@ -89,103 +90,6 @@ var selectedScale = 1;
 var centeringAnimationOccuring = false;
 
 var fightRadius = 6;
-
-////////////////
-// Add listener to search submit button
-////////////////
-document.getElementById("searchName").addEventListener("keydown", function(e) {
-	if(e.keyCode === 13) {
-		document.getElementById("searchSubmit").click();
-	}
-})
-document.getElementById("searchSubmit").addEventListener("click", function() {
-	var name = document.getElementById("searchName").value;
-	document.getElementById("searchName").value = "";
-
-	d3.selectAll(".node circle")
-		.transition("searchHighlight")
-		.duration(250)
-		.attr("r", function(d) {
-			if(d.name.toLowerCase().indexOf(name.toLowerCase()) === -1) {
-				return d.radius;
-			}
-			
-			return d.radius + 8;
-		})
-		.style("stroke", function(d) {
-			if(d.name.toLowerCase().indexOf(name.toLowerCase()) === -1) {
-				return "#ffffff";
-			}
-			
-			return "#000000";
-		})
-		.style("stroke-width", function(d) {
-			if(d.name.toLowerCase().indexOf(name.toLowerCase()) === -1) {
-				return "2px";
-			}
-			
-			return "6px";
-		})
-		.transition("restore")
-		.delay(500)
-		.duration(250)
-		.attr("r", function(d) {
-			return d.radius;
-		})
-		.style("stroke", function(d) {
-			return "#FFFFFF";
-		})
-		.style("stroke-width", function(d) {
-			return "2px";
-		})
-
-		d3.selectAll(".fightDot")
-		.transition("searchHighlight")
-		.duration(250)
-		.attr("r", function(d) {
-			if(d.opponentName.toLowerCase().indexOf(name.toLowerCase()) === -1) {
-				return fightRadius;
-			}
-			
-			return fightRadius * 1.5;
-		})
-		.style("stroke", function(d) {
-			if(d.opponentName.toLowerCase().indexOf(name.toLowerCase()) === -1) {
-				return d.defaultStroke;
-			}
-			
-			return "#000000";
-		})
-		.style("stroke-width", function(d) {
-			if(d.opponentName.toLowerCase().indexOf(name.toLowerCase()) === -1) {
-				return "3px";
-			}
-			
-			return "5px";
-		})
-		.transition("restore")
-		.delay(500)
-		.duration(250)
-		.attr("r", function(d) {
-			return fightRadius;
-		})
-		.style("stroke", function(d) {
-			return d.defaultStroke;
-		})
-		.style("stroke-width", function(d) {
-			return "3px";
-		})
-	
-	return false;
-});
-
-////////////////
-//// Dynamically insert minimum # of fighters so we only have to set the variable
-////////////////
-{
-	var subtitle = document.getElementById("subtitle");
-	subtitle.innerHTML = subtitle.innerHTML.replace("###", minFightCount);
-}
 
 // Gets X position for the cluster or label of a given weight class
 // weightClass - class being queried
@@ -476,6 +380,10 @@ function placeFighterTooltip(tooltip) {
 			}
 		}
 
+		if(opponentVector.x === 0 && opponentVector.y === 0) {
+			opponentVector.x = -1;
+		}
+		
 		// normalize
 		opponentVectorLen = Math.sqrt(opponentVector.x * opponentVector.x + opponentVector.y * opponentVector.y);
 		opponentVector.x /= opponentVectorLen;
@@ -645,52 +553,6 @@ d3.csv("fighters.csv", function(data) {
 			}
 		}
 
-		// Now that fight data is loaded into memory, remove any fighters
-		// that have < minFightCount
-		{
-			var removeList = [];
-			
-			for(var id in fighters) {
-				var fighter = fighters[id];
-
-				if(fighter.fightList.length < minFightCount) {
-					removeList.push(id);
-				}
-			}
-
-			for(var i = 0; i < removeList.length; i++) {
-				var removeId = removeList[i];
-				delete fighters[removeId];
-			}
-
-			console.log("Removed " + removeList.length + " fighters for having < " + minFightCount + " fights ... " + Object.keys(fighters).length + " fighters remain.");
-		}
-
-		// Remove any of the unrepresented weight classes from our master list
-		// so that we don't draw labels, etc. for them
-		{
-			var countPerWeightClass = {};
-			for(var i = 0; i < weightClasses.length; i++) {
-				countPerWeightClass[weightClasses[i]] = 0;
-			}
-			
-			for(var id in fighters) {
-				var fighter = fighters[id];
-				countPerWeightClass[fighter.wClass] += 1;
-			}
-
-			for(var i = 0; i < weightClasses.length; i++) {
-				if(countPerWeightClass[weightClasses[i]] === 0) {
-					console.log("Removed weight class " + weightClasses[i] + " for having 0 fighters in it after filtering.");
-					weightClasses.splice(i, 1); // remove i'th index
-					i--; // decrement i to avoid skipping next element
-				}
-				else {
-					selectedWeightClasses[weightClasses[i]] = true;
-				}
-			}
-		}
-
 		// Cache W-L and win % for each fighter
 		for(var id in fighters) {
 			var fighter = fighters[id];
@@ -720,7 +582,7 @@ d3.csv("fighters.csv", function(data) {
 			fighter.draws = drawCount;
 		}
 
-		// Create list of all the links
+		// Create list of all the matchups
 		for(var id in fighters) {
 			var fighter = fighters[id];
 
@@ -777,6 +639,7 @@ d3.csv("fighters.csv", function(data) {
 		smallTooltip
 			.classed("tooltip", true)
 			.classed("smallTooltip", true)
+			.style("opacity", 0);
 		
 		// Generate color scheme
 		var color = d3.scaleOrdinal(d3.schemeCategory20);
@@ -787,60 +650,60 @@ d3.csv("fighters.csv", function(data) {
 		//
 		// wClasses - a list of strings describing which weight classes to include.
 		//            null means include all of the weight classes.
-		function createInfoViz(wClasses) {
+		createInfoViz = function(wClasses, minFights) {
 
-			// This is the function that should always be called when reconstructing
-			// the infoviz. createInfoViz should only be called directly the first
-			// time the infoviz gets generated.
-			function regenerateInfoViz(wClasses, minFights) {
-				selectedFighterId = "";
-				tooltipFocusId = "";
+			selectedFighterId = "";
+			tooltipFocusId = "";
 
-				selectedTranslateX = 0;
-				selectedTranslateY = 0;
-				selectedScale = 1;
+			selectedTranslateX = 0;
+			selectedTranslateY = 0;
+			selectedScale = 1;
 
-				d3.select(".fighterChart")
-					.remove()
-				
-				if(d3nodes != null) {
-					d3nodes = d3nodes.data([])
-					d3nodes.exit().remove();
-				}
-
-				if(d3links != null) {
-					d3links = d3links.data([])
-					d3links.exit().remove();
-				}
-
-				if(d3simulation != null) {
-					d3simulation.nodes([]);
-
-					d3simulation.force("link")
-						.links([]);
-				}
-
-				d3simulation.restart();
-
-				// sort the wClasses list ordinally
-				if(wClasses == null) {
-					wClasses = weightClasses;
-				}
-				else {
-					wClasses.sort(function(a, b) {
-						return weightClasses.indexOf(a) - weightClasses.indexOf(b);
-					});
-				}
-				
-				// Clear whatever is currently on the svg
-				svg.selectAll("*").remove();
-				
-				createInfoViz(wClasses);
+			d3.select(".fighterChart")
+				.remove()
+			
+			if(d3nodes != null) {
+				d3nodes = d3nodes.data([])
+				d3nodes.exit().remove();
 			}
 
+			if(d3links != null) {
+				d3links = d3links.data([])
+				d3links.exit().remove();
+			}
+
+			if(d3simulation != null) {
+				d3simulation.nodes([]);
+
+				d3simulation.force("link")
+					.links([]);
+
+				d3simulation.alpha(0);
+				d3simulation.restart();
+			}
+
+
+			// sort the wClasses list ordinally
+			if(wClasses == null) {
+				wClasses = weightClasses;
+			}
+			else {
+				wClasses.sort(function(a, b) {
+					return weightClasses.indexOf(a) - weightClasses.indexOf(b);
+				});
+			}
+			
+			// Clear whatever is currently on the svg
+			svg.selectAll("*").remove();
+			
+
 			function filter(id) {
-				return wClasses.indexOf(fighters[id].wClass) !== -1// &&
-//					fighters[id].fightList.length >= minFights;
+				return wClasses.indexOf(fighters[id].wClass) !== -1 &&
+					fighters[id].fightList.length >= minFights;
+			}
+
+			if(wClasses == null) {
+				wClasses = weightClasses;
 			}
 
 			// Build list of nodes and links out of our master lists (fighters and fights)
@@ -848,10 +711,39 @@ d3.csv("fighters.csv", function(data) {
 			var nodes = [];
 			var links = [];
 
+			var visibleFighters = {};
+			
 			// fighters is a dict, so iterate by key
 			for(var id in fighters) {
 				if(filter(id)) {
 					nodes.push(fighters[id]);
+					visibleFighters[id] = (fighters[id]);
+				}
+			}
+			
+			var visibleWeightClasses = weightClasses.slice();
+			// Remove any of the unrepresented weight classes from our list
+			// so that we don't draw labels, etc. for them
+			{
+				var countPerWeightClass = {};
+				for(var i = 0; i < weightClasses.length; i++) {
+					countPerWeightClass[weightClasses[i]] = 0;
+				}
+				
+				for(var id in fighters) {
+					var fighter = fighters[id];
+
+					if(fighter.fightList.length >= minFights) {
+						countPerWeightClass[fighter.wClass] += 1;
+					}
+				}
+
+				for(var i = 0; i < visibleWeightClasses.length; i++) {
+					if(countPerWeightClass[visibleWeightClasses[i]] === 0) {
+						console.log("Removed weight class " + visibleWeightClasses[i] + " for having 0 fighters in it after filtering.");
+						visibleWeightClasses.splice(i, 1); // remove i'th index
+						i--; // decrement i to avoid skipping next element
+					}
 				}
 			}
 
@@ -872,7 +764,7 @@ d3.csv("fighters.csv", function(data) {
 				}
 			}
 
-			var percentOfFightersVisible = nodes.length / Object.keys(fighters).length;
+			var percentOfFightersVisible = nodes.length / Object.keys(visibleFighters).length;
 				  
 			d3simulation = d3.forceSimulation()
 				.nodes(nodes)
@@ -888,7 +780,7 @@ d3.csv("fighters.csv", function(data) {
 						.distance(function(d) {
 							// var dist = 1;
 							// var weightClassDifference = Math.abs(
-							// 	weightClasses.indexOf(d.source.wClass) - weightClasses.indexOf(d.target.wClass));
+							// 	visibleWeightClasses.indexOf(d.source.wClass) - visibleWeightClasses.indexOf(d.target.wClass));
 							
 							// dist += 2 * weightClassDifference;
 							// dist *= 200 * (1 - percentOfFightersVisible);
@@ -1249,7 +1141,7 @@ d3.csv("fighters.csv", function(data) {
 							
 							hideAdjacentLabels(fighter.id);
 
-							regenerateInfoViz(getSelectedWeightClasses())
+							createInfoViz(getSelectedWeightClasses(), minFightCount)
 						})
 
 					d3Chart.append("text")
@@ -1353,7 +1245,7 @@ d3.csv("fighters.csv", function(data) {
 							var selection = d3.select(this);
 							
 							var color;
-							if(d.opponentId in fighters) {
+							if(d.opponentId in visibleFighters) {
 								color = selection.attr("fill");
 								color = color.replace("b", "9");
 							}
@@ -1478,11 +1370,11 @@ d3.csv("fighters.csv", function(data) {
 			}
 
 			// Create weight class labels
-			for(var i = 0; i < weightClasses.length; i++) {
-				var wClass = weightClasses[i];
+			for(var i = 0; i < visibleWeightClasses.length; i++) {
+				var wClass = visibleWeightClasses[i];
 				
 				svg.append("text")
-					.attr("x", getXForWeightClass(wClass, weightClasses))
+					.attr("x", getXForWeightClass(wClass, visibleWeightClasses))
 					.attr("y", function() {
 						if(i % 2 === 0) {
 							return labelMargin / 3;
@@ -1496,7 +1388,7 @@ d3.csv("fighters.csv", function(data) {
 					.attr("fill", (function(closureValue) {
 						return function() {
 							if(selectedWeightClasses[closureValue]) {
-								return color(i);
+								return color(weightClasses.indexOf(closureValue));
 							}
 							else {
 								return "#aaaaaa";
@@ -1600,12 +1492,159 @@ d3.csv("fighters.csv", function(data) {
 							// toggle
 							selectedWeightClasses[closureValue] = !selectedWeightClasses[closureValue];
 
-							regenerateInfoViz(getSelectedWeightClasses());
+							createInfoViz(getSelectedWeightClasses(), minFightCount)
 						}
 					})(wClass));
 			}
 		}
 
-		createInfoViz(getSelectedWeightClasses());
+			createInfoViz(getSelectedWeightClasses(), minFightCount);
 	});
 });
+
+
+////////////////
+// Add listener to search submit button
+////////////////
+document.getElementById("searchName").addEventListener("keydown", function(e) {
+	if(e.keyCode === 13) {
+		document.getElementById("searchSubmit").click();
+	}
+})
+
+document.getElementById("searchSubmit").addEventListener("click", function() {
+	var name = document.getElementById("searchName").value;
+
+	if(name === "") {
+		return;
+	}
+
+	d3.selectAll(".node circle")
+		.transition("searchHighlight")
+		.duration(250)
+		.attr("r", function(d) {
+			if(d.name.toLowerCase().indexOf(name.toLowerCase()) === -1) {
+				return d.radius;
+			}
+			
+			return d.radius + 8;
+		})
+		.style("stroke", function(d) {
+			if(d.name.toLowerCase().indexOf(name.toLowerCase()) === -1) {
+				return "#ffffff";
+			}
+			
+			return "#000000";
+		})
+		.style("stroke-width", function(d) {
+			if(d.name.toLowerCase().indexOf(name.toLowerCase()) === -1) {
+				return "2px";
+			}
+			
+			return "6px";
+		})
+		.transition("restore")
+		.delay(500)
+		.duration(250)
+		.attr("r", function(d) {
+			return d.radius;
+		})
+		.style("stroke", function(d) {
+			return "#FFFFFF";
+		})
+		.style("stroke-width", function(d) {
+			return "2px";
+		})
+
+		d3.selectAll(".fightDot")
+		.transition("searchHighlight")
+		.duration(250)
+		.attr("r", function(d) {
+			if(d.opponentName.toLowerCase().indexOf(name.toLowerCase()) === -1) {
+				return fightRadius;
+			}
+			
+			return fightRadius * 2;
+		})
+		.style("stroke", function(d) {
+			if(d.opponentName.toLowerCase().indexOf(name.toLowerCase()) === -1) {
+				return d.defaultStroke;
+			}
+			
+			return "#000000";
+		})
+		.style("stroke-width", function(d) {
+			if(d.opponentName.toLowerCase().indexOf(name.toLowerCase()) === -1) {
+				return "3px";
+			}
+			
+			return "5px";
+		})
+		.transition("restore")
+		.delay(500)
+		.duration(250)
+		.attr("r", function(d) {
+			return fightRadius;
+		})
+		.style("stroke", function(d) {
+			return d.defaultStroke;
+		})
+		.style("stroke-width", function(d) {
+			return "3px";
+		})
+	
+	return false;
+});
+
+////////////////
+//// Dynamically insert minimum # of fighters so we only have to set the variable
+////////////////
+{
+	var countText = document.getElementById("mfc");
+	countText.innerHTML = minFightCount;
+}
+
+////////////////
+//// Add listeners to +- buttons
+////////////////
+{
+	document.getElementById("plus").addEventListener("click", function() {
+		var max = 25;
+		
+		if(minFightCount >= max) {
+			return;
+		}
+		
+		minFightCount += 1;
+		createInfoViz(getSelectedWeightClasses(), minFightCount);
+
+		var countText = document.getElementById("mfc");
+		countText.innerHTML = minFightCount;
+
+		if(minFightCount >= max) {
+			document.getElementById("plus").disabled = true;
+		}
+
+		document.getElementById("minus").disabled = false;
+	});
+
+	document.getElementById("minus").addEventListener("click", function() {
+		var min = 5;
+		
+		if(minFightCount <= min) {
+			return;
+		}
+		
+		minFightCount -= 1;
+		createInfoViz(getSelectedWeightClasses(), minFightCount);
+
+		var countText = document.getElementById("mfc");
+		countText.innerHTML = minFightCount;
+
+		if(minFightCount <= min) {
+			document.getElementById("minus").disabled = true;
+		}
+
+		document.getElementById("plus").disabled = false;
+	});
+}
