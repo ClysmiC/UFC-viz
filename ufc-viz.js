@@ -1,3 +1,13 @@
+// TODO:
+// - Tooltip on fight dot
+// - Highlight opponent when hovering over fight dot
+// - Highlight fight dot when hovering over opponent
+// - Axis labels on individual chart
+// - Disclaimer about >= 10 fights to be in network
+// - Asterisk on Y axis label - Disclaimer about 5 rounds for title fight
+// - Knockout - submission - decision labels near chart that highlight similar to weight labels
+
+
 var isChrome = /Chrome/.test(navigator.userAgent) && /Google Inc/.test(navigator.vendor);
 
 if(!isChrome) {
@@ -53,6 +63,7 @@ weightDescriptions["Super Heavyweight"] = ">265 lb";
 // fighters with less than this number of fights aren't shown on the network
 var MIN_FIGHT_COUNT = 10;
 
+
 // svg dimensions
 var width = window.innerWidth - 100
 var height = window.innerHeight - 10;
@@ -75,6 +86,99 @@ var selectedTranslateY = 0;
 var selectedScale = 1;
 
 var centeringAnimationOccuring = false;
+
+var fightRadius = 6;
+
+////////////////
+// Add listener to search submit button
+////////////////
+document.getElementById("searchName").addEventListener("keydown", function(e) {
+	if(e.keyCode === 13) {
+		document.getElementById("searchSubmit").click();
+	}
+})
+document.getElementById("searchSubmit").addEventListener("click", function() {
+	var name = document.getElementById("searchName").value;
+	document.getElementById("searchName").value = "";
+
+	d3.selectAll(".node circle")
+		.transition("searchHighlight")
+		.duration(250)
+		.attr("r", function(d) {
+			if(d.name.toLowerCase().indexOf(name.toLowerCase()) === -1) {
+				return d.radius;
+			}
+			
+			return d.radius + 8;
+		})
+		.style("stroke", function(d) {
+			if(d.name.toLowerCase().indexOf(name.toLowerCase()) === -1) {
+				return "#ffffff";
+			}
+			
+			return "#000000";
+		})
+		.style("stroke-width", function(d) {
+			if(d.name.toLowerCase().indexOf(name.toLowerCase()) === -1) {
+				return "2px";
+			}
+			
+			return "6px";
+		})
+		.transition("restore")
+		.delay(500)
+		.duration(250)
+		.attr("r", function(d) {
+			return d.radius;
+		})
+		.style("stroke", function(d) {
+			return "#FFFFFF";
+		})
+		.style("stroke-width", function(d) {
+			return "2px";
+		})
+
+		d3.selectAll(".fightDot")
+		.transition("searchHighlight")
+		.duration(250)
+		.attr("r", function(d) {
+			if(d.opponentName.toLowerCase().indexOf(name.toLowerCase()) === -1) {
+				return fightRadius;
+			}
+			
+			return fightRadius * 1.5;
+		})
+		.style("stroke", function(d) {
+			if(d.opponentName.toLowerCase().indexOf(name.toLowerCase()) === -1) {
+				return d.defaultStroke;
+			}
+			
+			return "#000000";
+		})
+		.style("stroke-width", function(d) {
+			if(d.opponentName.toLowerCase().indexOf(name.toLowerCase()) === -1) {
+				return "3px";
+			}
+			
+			return "5px";
+		})
+		.transition("restore")
+		.delay(500)
+		.duration(250)
+		.attr("r", function(d) {
+			return fightRadius;
+		})
+		.style("stroke", function(d) {
+			return d.defaultStroke;
+		})
+		.style("stroke-width", function(d) {
+			return "3px";
+		})
+	
+	return false;
+});
+
+////////////////
 
 // Gets X position for the cluster or label of a given weight class
 // weightClass - class being queried
@@ -773,14 +877,15 @@ d3.csv("fighters.csv", function(data) {
 
 			d3nodes = svg.append("g")
 				.attr("class", "node")
-				.selectAll("node")
+				.selectAll(".node")
 				.data(nodes)
 				.enter().append("g");
 
 			d3nodes.append("circle")
 				.attr("r", function(d) {
 					var sparseness = 1 - percentOfFightersVisible;
-					return (1 + 10 * d.winPercent) * (1 + 1 * sparseness);
+					d.radius = (1 + 10 * d.winPercent) * (1 + 1 * sparseness);
+					return d.radius;
 				})
 				.attr("id", function(d) {
 					 // storing this as DOM id so we can easily look up a node for a given fighter
@@ -1112,8 +1217,6 @@ d3.csv("fighters.csv", function(data) {
 						.attr("transform", "translate(" + (chartX - 10) + ", 0)")
 						.call(yAxis);
 
-					var fightRadius = 6;
-
 					var winColor = "#00bb00";
 					var lossColor = "#bb0000";
 					var drawColor = "#bbbb00";
@@ -1204,7 +1307,7 @@ d3.csv("fighters.csv", function(data) {
 								color = color.replace("b", "9");
 							}
 							else {
-								color = "#999999";
+								color = "#bbbbbb";
 							}
 
 							// cache
@@ -1343,7 +1446,9 @@ d3.csv("fighters.csv", function(data) {
 								.transition()
 								.duration(100)
 								.style("stroke", function(d) {
-									if(d.source.wClass === closureValue && d.target.wClass === closureValue) {
+									if(d.source.wClass === closureValue && d.target.wClass === closureValue ||
+									   d.source.id == selectedFighterId && d.target.wClass === closureValue ||
+									   d.target.id == selectedFighterId && d.source.wClass === closureValue) {
 										return "#000000";
 									}
 									else {

@@ -39,3 +39,12 @@
 	cursor: pointer;
 	font-family: Arial;
 }
+
+#title {
+	text-align: center;
+	font-family: Arial;
+}
+
+#search {
+	float: right;
+}
