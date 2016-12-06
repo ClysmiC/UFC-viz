@@ -1198,7 +1198,7 @@ d3.csv("fighters.csv", function(data) {
             .style("opacity", 0);
         
         // Generate color scheme
-        var color = d3.scaleOrdinal(d3.schemeCategory20);
+        var color = d3.scaleOrdinal(d3.schemeCategory10);
         
         //
         // This function completely scratches whatever is currently
@@ -1250,302 +1250,301 @@ d3.csv("fighters.csv", function(data) {
             
             // Clear whatever is currently on the svg
             svg.selectAll("*").remove();
-
-            function filter(id) {
-                return wClasses.indexOf(fighters[id].wClass) !== -1 &&
-                    fighters[id].fightList.length >= minFights;
-            }
-
-            if(wClasses == null) {
-                wClasses = weightClasses;
-            }
-
-            // Build list of nodes and links out of our master lists (fighters and fights)
-            // That meet our filter criteria
-            var nodes = [];
-            var links = [];
-
-            visibleFighters = {};
-            
-            // fighters is a dict, so iterate by key
-            for(var id in fighters) {
-                if(filter(id)) {
-                    nodes.push(fighters[id]);
-                    visibleFighters[id] = (fighters[id]);
-                }
-            }
-            
-            var visibleWeightClasses = weightClasses.slice();
-            // Remove any of the unrepresented weight classes from our list
-            // so that we don't draw labels, etc. for them
-            {
-                var countPerWeightClass = {};
-                for(var i = 0; i < weightClasses.length; i++) {
-                    countPerWeightClass[weightClasses[i]] = 0;
-                }
-                
-                for(var id in fighters) {
-                    var fighter = fighters[id];
-
-                    if(fighter.fightList.length >= minFights) {
-                        countPerWeightClass[fighter.wClass] += 1;
-                    }
-                }
-
-                for(var i = 0; i < visibleWeightClasses.length; i++) {
-                    if(countPerWeightClass[visibleWeightClasses[i]] === 0) {
-                        console.log("Removed weight class " + visibleWeightClasses[i] + " for having 0 fighters in it after filtering.");
-                        visibleWeightClasses.splice(i, 1); // remove i'th index
-                        i--; // decrement i to avoid skipping next element
-                    }
-                }
-            }
-
-            // matchups is a list, so iterate normally
-            for(var i = 0; i < matchups.length; i++) {
-                var matchup = matchups[i];
-                var id1 = matchup.fighter1;
-                var id2 = matchup.fighter2;
-
-                if(filter(id1) && filter(id2)) {
-                    links.push(
-                        {
-                            source: fighters[id1],
-                            target: fighters[id2],
-                            count: matchup.count
-                        }
-                    );
-                }
-            }
-
-            var percentOfFightersVisible = nodes.length / Object.keys(visibleFighters).length;
-            
-            d3simulation = d3.forceSimulation().stop()
-                .nodes(nodes)
-                .force(
-                    "link",
-                    // This force attracts nodes that are connected
-                    d3.forceLink()
-                        .links(links)
-                        .id(function(d) {
-                            return d.id;
-                        })
-                        .distance(function(d) {
-                            // var dist = 1;
-                            // var weightClassDifference = Math.abs(
-                            //  visibleWeightClasses.indexOf(d.source.wClass) - visibleWeightClasses.indexOf(d.target.wClass));
-                            
-                            // dist += 2 * weightClassDifference;
-                            // dist *= 200 * (1 - percentOfFightersVisible);
-                            // return dist;
-
-                            return 75 + 150 * (1 - percentOfFightersVisible);
-                        })
-                )
-                .force(
-                    // This force repels nodes away from each other
-                    "charge",
-                    d3.forceManyBody()
-                        .distanceMax(300)
-                        .strength(-100)
-                )
-                .force(
-                    // This force centers the network as a whole around the center of the screen
-                    "center",
-                    d3.forceCenter()
-                        .x(width / 2)
-                        .y((labelMargin + (height - labelMargin)) / 2)
-                )
-                .force(
-                    // This force should position the lighter weight clusters to the left and
-                    // heavier ones to the right
-                    "xPosForce",
-                    d3.forceX(function(d) {
-                        var result = getXForWeightClass(d.wClass, wClasses);
-                        return result;
-                    })
-                )
-                .force(
-                    // This force prevents things from drifting too high up/down)
-                    "yPosForce",
-                    d3.forceY(function(d) {
-                        return labelMargin + (height - labelMargin) / 2;
-                    })
-                );
-            
-            d3links = svg.append("g")
-                .attr("class", "link")
-                .selectAll("line")
-                .data(links)
-                .enter().append("line")
-                .attr("stroke-width", function(d) {
-                    // max # of head2head fights in our data set is 3
-                    // but put a hard cap on this just for good measure
-                    return Math.min(1 + 2 * d.count, 11);
-                })
-                .style("opacity", defaultLinkOpacity)
-                .attr("stroke", defaultLinkStroke);
-
-            d3nodes = svg.append("g")
-                .attr("class", "node")
-                .selectAll(".node")
-                .data(nodes)
-                .enter().append("g");
-
-            d3nodes.append("circle")
-                .attr("r", function(d) {
-                    var sparseness = 1 - percentOfFightersVisible;
-                    d.radius = (1 + 10 * d.winPercent) * (1 + 1 * sparseness);
-                    return d.radius;
-                })
-                .attr("id", function(d) {
-                     // storing this as DOM id so we can easily look up a node for a given fighter
-                    return "node" + d.id
-                })
-                .attr("fill", function(d) {
-                    return color(weightClasses.indexOf(d.wClass));
-                })
-                .on("mouseover", function(fighter) {
-                    // Create tooltip
-                    var htmlString = getTooltipHTMLForFighter(fighter.id, false);
-
-                    tooltipFocusId = fighter.id;
-
-                    tooltip.html(htmlString);
-                    placeFighterTooltip(tooltip);
-                    
-
-                    tooltip.transition()
-                        .duration(0)
-                        .style("opacity", 1);
-
-                    
-                    if(selectedFighterId === "") {
-                        // fade opacity of non-connected fighters
-                        d3.selectAll(".node circle")
-                            .transition()
-                            .duration(100)
-                            .style("opacity", function(d) {
-                                if(fighter.id === d.id) {
-                                    return 1;
-                                }
-
-                                for(var i = 0; i < fighter.fightList.length; i++) {
-                                    var opponentId = fighter.fightList[i].opponentId;
-
-                                    if (opponentId === d.id) {
-                                        return 1
-                                    }
-                                }
-                                
-                                return .1;
-                            })
-
-                        // fade opacity of non-connected links
-                        d3.selectAll(".link line")
-                            .transition()
-                            .duration(100)
-                            .style("opacity", function(d) {
-                                if(fighter.id === d.source.id ||
-                                   fighter.id === d.target.id) {
-                                    return 1;
-                                }
-                                
-                                return .1;
-                            })
-
-                        // show name labels of connected fighters
-                        showAdjacentLabels(fighter.id, false);
-                    }
-                    else {
-                        d3.selectAll(".fightDot")
-                            .transition()
-                            .duration(100)
-                            .style("stroke", function(d) {
-                                if(d.opponentId === fighter.id) {
-                                    return "#000000";
-                                }
-                                
-                                return d.defaultStroke;
-                            })
-                            .style("stroke-width", function(d) {
-                                if(d.opponentId === fighter.id) {
-                                    return fightStrokeWidth * 1.5 + "px";
-                                }
-                                
-                                return fightStrokeWidth + "px";
-                            })
-                            .attr("r", function(d) {
-                                if(d.opponentId === fighter.id) {
-                                    return fightRadius * 2;
-                                }
-                                
-                                return fightRadius;
-                            })
-                    }
-                })
-                .on("mouseout", function(fighter) {
-                    // hide tooltip
-                    tooltip.transition()
-                        .duration(100)
-                        .style("opacity", 0);
-
-                    tooltipFocusId = "";
-
-                    if(selectedFighterId === "") {
-                        // restore opacity of non-connected fighters and links
-                        d3.selectAll(".node circle")
-                            .transition()
-                            .duration(100)
-                            .style("opacity", 1)
-
-                        d3.selectAll(".link line")
-                            .transition()
-                            .duration(100)
-                            .style("opacity", defaultLinkOpacity)
-                        
-                        // hide all fighter labels
-                        var opponentIds = getOpponentIds(fighter.id);
-                        for(var i = 0; i < opponentIds.length; i++) {
-                            var label = getSvgLabelForFighter(opponentIds[i]);
-
-                            if(label != null) {
-                                label
-                                    .transition()
-                                    .duration(100)
-                                    .style("opacity", 0)
-                            }
-                        }
-                    }
-
-                    d3.selectAll(".fightDot")
-                        .transition()
-                        .duration(100)
-                        .style("stroke", function(d) {
-                            return d.defaultStroke;
-                        })
-                        .style("stroke-width", fightStrokeWidth + "px")
-                        .attr("r", fightRadius)
-
-                })
-                .on("click", fighterClicked)
-
-            d3nodes.append("text")
-                .text(function(d) { return d.name })
-                .attr("id", function(d) {
-                     // storing this as DOM id so we can easily look up a node for a given fighter
-                    return "label" + d.id
-                })
-                .attr("font-family", "Arial")
-                .attr("text-anchor", "middle")
-                .attr("class", "fighterLabel")
-                .style("opacity", 0)
-                .attr("font-size", 12)
-
-            // simulate then display
+			
             showSpinner();
-
             setTimeout(function() {
+
+				function filter(id) {
+					return wClasses.indexOf(fighters[id].wClass) !== -1 &&
+						fighters[id].fightList.length >= minFights;
+				}
+
+				if(wClasses == null) {
+					wClasses = weightClasses;
+				}
+
+				// Build list of nodes and links out of our master lists (fighters and fights)
+				// That meet our filter criteria
+				var nodes = [];
+				var links = [];
+
+				visibleFighters = {};
+				
+				// fighters is a dict, so iterate by key
+				for(var id in fighters) {
+					if(filter(id)) {
+						nodes.push(fighters[id]);
+						visibleFighters[id] = (fighters[id]);
+					}
+				}
+				
+				var visibleWeightClasses = weightClasses.slice();
+				// Remove any of the unrepresented weight classes from our list
+				// so that we don't draw labels, etc. for them
+				{
+					var countPerWeightClass = {};
+					for(var i = 0; i < weightClasses.length; i++) {
+						countPerWeightClass[weightClasses[i]] = 0;
+					}
+					
+					for(var id in fighters) {
+						var fighter = fighters[id];
+
+						if(fighter.fightList.length >= minFights) {
+							countPerWeightClass[fighter.wClass] += 1;
+						}
+					}
+
+					for(var i = 0; i < visibleWeightClasses.length; i++) {
+						if(countPerWeightClass[visibleWeightClasses[i]] === 0) {
+							console.log("Removed weight class " + visibleWeightClasses[i] + " for having 0 fighters in it after filtering.");
+							visibleWeightClasses.splice(i, 1); // remove i'th index
+							i--; // decrement i to avoid skipping next element
+						}
+					}
+				}
+
+				// matchups is a list, so iterate normally
+				for(var i = 0; i < matchups.length; i++) {
+					var matchup = matchups[i];
+					var id1 = matchup.fighter1;
+					var id2 = matchup.fighter2;
+
+					if(filter(id1) && filter(id2)) {
+						links.push(
+							{
+								source: fighters[id1],
+								target: fighters[id2],
+								count: matchup.count
+							}
+						);
+					}
+				}
+
+				var percentOfFightersVisible = nodes.length / Object.keys(visibleFighters).length;
+				
+				d3simulation = d3.forceSimulation().stop()
+					.nodes(nodes)
+					.force(
+						"link",
+						// This force attracts nodes that are connected
+						d3.forceLink()
+							.links(links)
+							.id(function(d) {
+								return d.id;
+							})
+							.distance(function(d) {
+								// var dist = 1;
+								// var weightClassDifference = Math.abs(
+								//  visibleWeightClasses.indexOf(d.source.wClass) - visibleWeightClasses.indexOf(d.target.wClass));
+								
+								// dist += 2 * weightClassDifference;
+								// dist *= 200 * (1 - percentOfFightersVisible);
+								// return dist;
+
+								return 75 + 150 * (1 - percentOfFightersVisible);
+							})
+					)
+					.force(
+						// This force repels nodes away from each other
+						"charge",
+						d3.forceManyBody()
+							.distanceMax(300)
+							.strength(-100)
+					)
+					.force(
+						// This force centers the network as a whole around the center of the screen
+						"center",
+						d3.forceCenter()
+							.x(width / 2)
+							.y((labelMargin + (height - labelMargin)) / 2)
+					)
+					.force(
+						// This force should position the lighter weight clusters to the left and
+						// heavier ones to the right
+						"xPosForce",
+						d3.forceX(function(d) {
+							var result = getXForWeightClass(d.wClass, wClasses);
+							return result;
+						})
+					)
+					.force(
+						// This force prevents things from drifting too high up/down)
+						"yPosForce",
+						d3.forceY(function(d) {
+							return labelMargin + (height - labelMargin) / 2;
+						})
+					);
+				
+				d3links = svg.append("g")
+					.attr("class", "link")
+					.selectAll("line")
+					.data(links)
+					.enter().append("line")
+					.attr("stroke-width", function(d) {
+						// max # of head2head fights in our data set is 3
+						// but put a hard cap on this just for good measure
+						return Math.min(1 + 2 * d.count, 11);
+					})
+					.style("opacity", defaultLinkOpacity)
+					.attr("stroke", defaultLinkStroke);
+
+				d3nodes = svg.append("g")
+					.attr("class", "node")
+					.selectAll(".node")
+					.data(nodes)
+					.enter().append("g");
+
+				d3nodes.append("circle")
+					.attr("r", function(d) {
+						var sparseness = 1 - percentOfFightersVisible;
+						d.radius = (1 + 10 * d.winPercent) * (1 + 1 * sparseness);
+						return d.radius;
+					})
+					.attr("id", function(d) {
+						// storing this as DOM id so we can easily look up a node for a given fighter
+						return "node" + d.id
+					})
+					.attr("fill", function(d) {
+						return color(weightClasses.indexOf(d.wClass));
+					})
+					.on("mouseover", function(fighter) {
+						// Create tooltip
+						var htmlString = getTooltipHTMLForFighter(fighter.id, false);
+
+						tooltipFocusId = fighter.id;
+
+						tooltip.html(htmlString);
+						placeFighterTooltip(tooltip);
+						
+
+						tooltip.transition()
+							.duration(0)
+							.style("opacity", 1);
+
+						
+						if(selectedFighterId === "") {
+							// fade opacity of non-connected fighters
+							d3.selectAll(".node circle")
+								.transition()
+								.duration(100)
+								.style("opacity", function(d) {
+									if(fighter.id === d.id) {
+										return 1;
+									}
+
+									for(var i = 0; i < fighter.fightList.length; i++) {
+										var opponentId = fighter.fightList[i].opponentId;
+
+										if (opponentId === d.id) {
+											return 1
+										}
+									}
+									
+									return .1;
+								})
+
+							// fade opacity of non-connected links
+							d3.selectAll(".link line")
+								.transition()
+								.duration(100)
+								.style("opacity", function(d) {
+									if(fighter.id === d.source.id ||
+									   fighter.id === d.target.id) {
+										return 1;
+									}
+									
+									return .1;
+								})
+
+							// show name labels of connected fighters
+							showAdjacentLabels(fighter.id, false);
+						}
+						else {
+							d3.selectAll(".fightDot")
+								.transition()
+								.duration(100)
+								.style("stroke", function(d) {
+									if(d.opponentId === fighter.id) {
+										return "#000000";
+									}
+									
+									return d.defaultStroke;
+								})
+								.style("stroke-width", function(d) {
+									if(d.opponentId === fighter.id) {
+										return fightStrokeWidth * 1.5 + "px";
+									}
+									
+									return fightStrokeWidth + "px";
+								})
+								.attr("r", function(d) {
+									if(d.opponentId === fighter.id) {
+										return fightRadius * 2;
+									}
+									
+									return fightRadius;
+								})
+						}
+					})
+					.on("mouseout", function(fighter) {
+						// hide tooltip
+						tooltip.transition()
+							.duration(100)
+							.style("opacity", 0);
+
+						tooltipFocusId = "";
+
+						if(selectedFighterId === "") {
+							// restore opacity of non-connected fighters and links
+							d3.selectAll(".node circle")
+								.transition()
+								.duration(100)
+								.style("opacity", 1)
+
+							d3.selectAll(".link line")
+								.transition()
+								.duration(100)
+								.style("opacity", defaultLinkOpacity)
+							
+							// hide all fighter labels
+							var opponentIds = getOpponentIds(fighter.id);
+							for(var i = 0; i < opponentIds.length; i++) {
+								var label = getSvgLabelForFighter(opponentIds[i]);
+
+								if(label != null) {
+									label
+										.transition()
+										.duration(100)
+										.style("opacity", 0)
+								}
+							}
+						}
+
+						d3.selectAll(".fightDot")
+							.transition()
+							.duration(100)
+							.style("stroke", function(d) {
+								return d.defaultStroke;
+							})
+							.style("stroke-width", fightStrokeWidth + "px")
+							.attr("r", fightRadius)
+
+					})
+					.on("click", fighterClicked)
+
+				d3nodes.append("text")
+					.text(function(d) { return d.name })
+					.attr("id", function(d) {
+						// storing this as DOM id so we can easily look up a node for a given fighter
+						return "label" + d.id
+					})
+					.attr("font-family", "Arial")
+					.attr("text-anchor", "middle")
+					.attr("class", "fighterLabel")
+					.style("opacity", 0)
+					.attr("font-size", 12)
+
                 for(var i = 500; i > 0; --i) {
                     d3simulation.tick();
                 }
