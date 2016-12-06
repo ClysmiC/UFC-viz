@@ -61,19 +61,20 @@ weightDescriptions["Heavyweight"] = "205-265 lb";
 weightDescriptions["Super Heavyweight"] = ">265 lb";
 
 // fighters with less than this number of fights aren't shown on the network
-var MIN_FIGHT_COUNT = 10;
+var minFightCount = 10;
 
 
 // svg dimensions
 var width = window.innerWidth - 100
-var height = window.innerHeight - 10;
+var header = document.getElementById("header");
+var height = window.innerHeight - 75 - header.offsetHeight;
 
 var d3nodes;
 var d3links;
 var d3simulation;
 
 // space allocated at top of svg exclusively for the labels
-var labelMargin = 100;
+var labelMargin = 80;
 
 var defaultLinkOpacity = 0.4;
 var defaultLinkStroke = "#999999";
@@ -179,6 +180,12 @@ document.getElementById("searchSubmit").addEventListener("click", function() {
 });
 
 ////////////////
+//// Dynamically insert minimum # of fighters so we only have to set the variable
+////////////////
+{
+	var subtitle = document.getElementById("subtitle");
+	subtitle.innerHTML = subtitle.innerHTML.replace("###", minFightCount);
+}
 
 // Gets X position for the cluster or label of a given weight class
 // weightClass - class being queried
@@ -195,7 +202,9 @@ function getXForWeightClass(weightClass, weightClassList) {
 
 	if(i === -1) return -1;
 
-	return width / weightClassList.length * (i + .5);
+	var margin = 25;
+	
+	return margin + (width - 2 * margin) / weightClassList.length * (i + .5);
 }
 
 function getSelectedWeightClasses() {
@@ -251,7 +260,7 @@ function clampX(value) {
 }
 function clampY(value) {
 	var minimum = labelMargin;
-	var maximum = height - 50;
+	var maximum = height - 20;
 
 	if(selectedFighterId !== "") {
 		var selectedCircle = getSvgCircleForFighter(selectedFighterId);
@@ -595,14 +604,14 @@ d3.csv("fighters.csv", function(data) {
 		}
 
 		// Now that fight data is loaded into memory, remove any fighters
-		// that have < MIN_FIGHT_COUNT
+		// that have < minFightCount
 		{
 			var removeList = [];
 			
 			for(var id in fighters) {
 				var fighter = fighters[id];
 
-				if(fighter.fightList.length < MIN_FIGHT_COUNT) {
+				if(fighter.fightList.length < minFightCount) {
 					removeList.push(id);
 				}
 			}
@@ -612,7 +621,7 @@ d3.csv("fighters.csv", function(data) {
 				delete fighters[removeId];
 			}
 
-			console.log("Removed " + removeList.length + " fighters for having < " + MIN_FIGHT_COUNT + " fights ... " + Object.keys(fighters).length + " fighters remain.");
+			console.log("Removed " + removeList.length + " fighters for having < " + minFightCount + " fights ... " + Object.keys(fighters).length + " fighters remain.");
 		}
 
 		// Remove any of the unrepresented weight classes from our master list
@@ -719,7 +728,6 @@ d3.csv("fighters.csv", function(data) {
 		tooltip.attr("class", "tooltip")
 			.style("opacity", 0);
 		
-
 		// Generate color scheme
 		var color = d3.scaleOrdinal(d3.schemeCategory20);
 		
@@ -734,7 +742,7 @@ d3.csv("fighters.csv", function(data) {
 			// This is the function that should always be called when reconstructing
 			// the infoviz. createInfoViz should only be called directly the first
 			// time the infoviz gets generated.
-			function regenerateInfoViz(wClasses) {											
+			function regenerateInfoViz(wClasses, minFights) {
 				selectedFighterId = "";
 				tooltipFocusId = "";
 
@@ -781,7 +789,8 @@ d3.csv("fighters.csv", function(data) {
 			}
 
 			function filter(id) {
-				return wClasses.indexOf(fighters[id].wClass) !== -1;
+				return wClasses.indexOf(fighters[id].wClass) !== -1// &&
+//					fighters[id].fightList.length >= minFights;
 			}
 
 			// Build list of nodes and links out of our master lists (fighters and fights)
@@ -835,7 +844,7 @@ d3.csv("fighters.csv", function(data) {
 							// dist *= 200 * (1 - percentOfFightersVisible);
 							// return dist;
 
-							return 75 + 150 * (1 - percentOfFightersVisible);
+							return 40 + 100 * (1 - percentOfFightersVisible);
 						})
 				)
 				.force(

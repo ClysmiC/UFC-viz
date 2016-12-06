@@ -10,15 +10,25 @@
 
 
     <body>
-	  <div>
-		<h1 id="title">UFC Matchups Visualized</h1>
+	  <div id="header" class="arialText">
+		<h3 id="title">UFC Matchups Visualized</h3>
+		<div>
+		  <p id="subtitle" class="arialText">Includes fighters with >= ### recorded fights
+		  	<span>
+			  <button id="plus" type="button">+</button>
+			  <button id="minus" type="button">-</button>
+			</span>
+		  </p>
+		</div>
 		<div id="search">
-			<input id="searchName" type="text" placeholder="Search By Name">
-			<button id="searchSubmit" type="button">Search</button>
+		  <input id="searchName" type="text" placeholder="Search By Name">
+		  <button id="searchSubmit" type="button">Search</button>
 		</div>
 	  </div>
+	  
 	  <div class="chart">
 	  </div>
+	  
         <!-- Execute script -->
         <script type="text/javascript" src="ufc-viz.js"></script>
     </body>

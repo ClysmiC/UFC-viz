@@ -10,11 +10,12 @@
 }
 
 .chart {
-	background: #dddddd;
 	margin: 0 auto;
 }
 
 .svg {
+	display: block;
+	margin: 0 auto;
 	background: #eeeeee;
 }
 
@@ -40,11 +41,25 @@
 	font-family: Arial;
 }
 
-#title {
-	text-align: center;
+.arialText {
 	font-family: Arial;
+}
+
+#header {
+	text-align: center;
+}
+
+#plus {
+	margin-left: 10px;
+}
+
+#subtitle {
+	font-size: .75em;
+	font-style: italic;
 }
 
 #search {
 	float: right;
+	margin-right: 50px;
+	margin-bot: 10px;
 }
