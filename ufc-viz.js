@@ -1,7 +1,4 @@
 // TODO:
-// - Axis labels on individual chart
-// - Disclaimer about >= 10 fights to be in network
-// - Asterisk on Y axis label - Disclaimer about 5 rounds for title fight
 // - Knockout - submission - decision labels near chart that highlight similar to weight labels
 
 
@@ -647,6 +644,60 @@ function fighterClicked(fighter) {
 
 	d3Chart.append("g").attr("class", "xAxis");
 	d3Chart.append("g").attr("class", "yAxis");
+
+	var winColor = "#00bb00";
+	var lossColor = "#bb0000";
+	var drawColor = "#bbbb00";
+
+	function getColor(result) {
+		if(result === "win") {
+			return winColor;
+		}
+		else if (result === "loss") {
+			return lossColor;
+		}
+		else {
+			return drawColor;
+		}
+
+		return "#bbbbbb";
+	}
+	
+	var winTextX = chartX - 50;
+	var winTextY = yScale(3);
+	
+	d3Chart.append("text")
+		.text("WON IN (#) ROUNDS *")
+		.classed("yAxisLabel", true)
+		.attr("text-anchor", "middle")
+		.attr("font-family", "Arial")
+		.attr("font-weight", "bold")
+		.attr("fill", winColor)
+		.attr("x", winTextX)
+		.attr("y", winTextY)
+		.attr("transform", "rotate(-90, " + winTextX + ", " + winTextY + ")");
+
+	var lossTextX = chartX - 50;
+	var lossTextY = yScale(-3);
+	
+	d3Chart.append("text")
+		.text("LOST IN (#) ROUNDS *")
+		.classed("yAxisLabel", true)
+		.attr("text-anchor", "middle")
+		.attr("font-family", "Arial")
+		.attr("font-weight", "bold")
+		.attr("fill", lossColor)
+		.attr("x", lossTextX)
+		.attr("y", lossTextY)
+		.attr("transform", "rotate(-90, " + lossTextX + ", " + lossTextY + ")");
+
+	d3Chart.append("text")
+		.text("* Standard fights go a maximum of 3 rounds - Title fights go a maximum of 5")
+		.attr("x", chartX + 16)
+		.attr("y", chartY + chartHeight + 40)
+		.attr("font-family", "Arial")
+		.attr("font-style", "italic")
+		.attr("font-size", 12)
 	
 	var fightCircles = d3Chart.append("g")
 		.attr("class", "fightCircle")
@@ -703,24 +754,6 @@ function fighterClicked(fighter) {
 	svg.select(".yAxis")
 		.attr("transform", "translate(" + (chartX - 10) + ", 0)")
 		.call(yAxis);
-
-	var winColor = "#00bb00";
-	var lossColor = "#bb0000";
-	var drawColor = "#bbbb00";
-
-	function getColor(result) {
-		if(result === "win") {
-			return winColor;
-		}
-		else if (result === "loss") {
-			return lossColor;
-		}
-		else {
-			return drawColor;
-		}
-
-		return "#bbbbbb";
-	}
 
 	fightCircles.append("line")
 		.classed("fightStem", true)
