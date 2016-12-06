@@ -185,7 +185,7 @@ function clampY(value) {
 	if(selectedFighterId !== "") {
 		var selectedCircle = getSvgCircleForFighter(selectedFighterId);
 		var selectedY = parseFloat(selectedCircle.attr("cy"));
-		minimum = selectedY - (height / 2) / selectedScale;
+		minimum = selectedY - (height / 2 - labelMargin) / selectedScale;
 		maximum = selectedY + (height / 2) / selectedScale;
 
 		minimum += 50 / selectedScale;
@@ -678,7 +678,6 @@ d3.csv("fighters.csv", function(data) {
 				d3simulation.force("link")
 					.links([]);
 
-				d3simulation.alpha(0);
 				d3simulation.restart();
 			}
 
@@ -786,7 +785,7 @@ d3.csv("fighters.csv", function(data) {
 							// dist *= 200 * (1 - percentOfFightersVisible);
 							// return dist;
 
-							return 40 + 100 * (1 - percentOfFightersVisible);
+							return 75 + 150 * (1 - percentOfFightersVisible);
 						})
 				)
 				.force(
@@ -810,6 +809,13 @@ d3.csv("fighters.csv", function(data) {
 					d3.forceX(function(d) {
 						var result = getXForWeightClass(d.wClass, wClasses);
 						return result;
+					})
+				)
+				.force(
+					// This force prevents things from drifting too high up/down)
+					"yPosForce",
+					d3.forceY(function(d) {
+						return labelMargin + (height - labelMargin) / 2;
 					})
 				);
 
