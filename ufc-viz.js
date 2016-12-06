@@ -123,11 +123,14 @@ function getSelectedWeightClasses() {
 	return selection;
 }
 
-function getTooltipHTMLForFighter(id) {
+function getTooltipHTMLForFighter(id, omitName) {
 	var fighter = fighters[id];
-	
-	var htmlString = "<b>" + fighter.name + "</b>";
-	htmlString += "<hr>";
+	var htmlString = "";
+
+	if(!omitName) {
+		htmlString += "<b>" + fighter.name + "</b>";
+		htmlString += "<hr>";
+	}
 	htmlString += fighter.wClass;
 	htmlString += "<br>";
 	htmlString += inchesToHeightStr(fighter.height) + " " + fighter.weight + " lbs";
@@ -338,8 +341,8 @@ function placeFightTooltip(smallTooltip, svgCircle) {
 	var svgPos = document.getElementById("theSvg").getBoundingClientRect();
 	
 	smallTooltip
-		.style("left", (svgPos.left + tooltipCenterX) + "px")
-		.style("top", (svgPos.top + tooltipCenterY + 64) + "px")
+		.style("left", (svgPos.left + tooltipCenterX - getSmallToolTipWidth() / 2 - 32) + "px")
+		.style("top", (svgPos.top + tooltipCenterY) + "px")
 		.style("transform", "translate(" +
 			   -getSmallToolTipWidth() / 2 + "px," +
 			   -getSmallToolTipHeight() / 2 + "px)")
@@ -504,6 +507,7 @@ d3.csv("fighters.csv", function(data) {
 			var result1 = fight["f1result"];
 			var result2 = fight["f2result"];
 			var method = fight["method"].toLowerCase();
+			var details = fight["method_d"].toLowerCase();
 			var round = fight["round"];
 			var date = fight["event_date"].split("/");
 
@@ -523,6 +527,7 @@ d3.csv("fighters.csv", function(data) {
 							result: result1,
 							round: round,
 							method: method,
+							details: details,
 							opponentWClass: fighters[id2].wClass
 						}
 					);
@@ -535,6 +540,7 @@ d3.csv("fighters.csv", function(data) {
 							result: result2,
 							round: round,
 							method: method,
+							details: details,
 							opponentWClass: fighters[id1].wClass
 						}
 					);
@@ -853,7 +859,7 @@ d3.csv("fighters.csv", function(data) {
 				})
 				.on("mouseover", function(fighter) {
 					// Create tooltip
-					var htmlString = getTooltipHTMLForFighter(fighter.id);
+					var htmlString = getTooltipHTMLForFighter(fighter.id, false);
 
 					tooltipFocusId = fighter.id;
 
@@ -1275,31 +1281,34 @@ d3.csv("fighters.csv", function(data) {
 							
 							// Create tooltip
 							if(d.result === "win") {
-								nameString = "<b><u>" + fighter.name + "</u> vs. " + d.opponentName + "</b>";
-								resultString += "Win by " + d.method + " (" + d.round + " rounds)";
+								resultString += "Win by " + d.method + " (" + d.details + ")";
 							}
 							else if (d.result === "loss") {
-								nameString = "<b>" + fighter.name + " vs. <u>" + d.opponentName + "</u></b>";
-								resultString += "Loss by " + d.method + " (" + d.round + " rounds)";
+								resultString += "Loss by " + d.method + " (" + d.details + ")";
 							}
 							else {
-								nameString = "<b>" + fighter.name + " vs. " + d.opponentName + "</b>";
-								resultString += "Draw (" + d.round + " round(s))";
+								resultString += "Draw";
 							}
 
 							var dateString = d.date.toISOString().slice(0, 10);
 							
-							var htmlString = nameString;
+							// var htmlString = nameString;
+							// htmlString += "<hr>";
+							var leftString = getTooltipHTMLForFighter(fighter.id, true);
+							var rightString = getTooltipHTMLForFighter(d.opponentId, true);
+
+							htmlString = "<table class='ttTable'>"
+							htmlString += "<tr><th>" + fighter.name + "</th><th> vs. </th><th>" + d.opponentName + "</th>"
+							htmlString += "<tr><td>" + leftString + "</td><td></td><td>" + rightString + "</td></tr>";
+							htmlString += "</table>";
+
 							htmlString += "<hr>";
 							htmlString += "Date: " + dateString;
 							htmlString += "<br>";
 							htmlString += resultString;
+							htmlString += "<br>";
+							htmlString += d.round + " rounds";
 
-							var leftString = getTooltipHTMLForFighter(fighter.id);
-							var rightString = getTooltipHTMLForFighter(d.opponentId);
-
-							htmlString += "<hr>"
-							htmlString += "<table class='ttTable'><tr><td>" + leftString + "</td><td>" + rightString + "</td></tr></table>";
 							
 							smallTooltip.html(htmlString);
 							placeFightTooltip(smallTooltip, selection);

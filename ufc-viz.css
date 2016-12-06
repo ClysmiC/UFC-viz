@@ -42,6 +42,7 @@
 
 .smallTooltip {
 	font-size: 12px;
+	line-height: 1.5em;
 	background: rgba(180, 180, 180, 0.8);
 }
 
@@ -84,4 +85,17 @@
 #mfc {
 	font-style: normal;
 	font-weight: bold;
+}
+
+#fightHeader {
+	border-bottom: 1px solid black;
+}
+
+table {
+	/* border-collapse: collapse; */
+	line-height: 1.2em;
+}
+
+th {
+	border-bottom: 1px solid black;
 }
