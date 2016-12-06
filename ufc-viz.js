@@ -1,12 +1,11 @@
 // TODO:
 // - Knockout - submission - decision labels near chart that highlight similar to weight labels
 
+// var isChrome = /Chrome/.test(navigator.userAgent) && /Google Inc/.test(navigator.vendor);
 
-var isChrome = /Chrome/.test(navigator.userAgent) && /Google Inc/.test(navigator.vendor);
-
-if(!isChrome) {
-    alert("This site was designed and tested on Google Chrome. Extreme slowdown has been noticed on Firefox. Performance on Edge and IE is acceptable, however for best experience please use Google Chrome");
-}
+// if(!isChrome) {
+//     alert("This site was designed and tested on Google Chrome. Extreme slowdown has been noticed on Firefox. Performance on Edge and IE is acceptable, however for best experience please use Google Chrome");
+// }
 
 // master list of fighters
 // dict indexed by fighter id
