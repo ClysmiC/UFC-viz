@@ -139,7 +139,7 @@ function clampX(value) {
 		maximum = selectedX + (width / 4) / selectedScale;
 		
 		minimum += 75 / selectedScale;
-		maximum += 50 / selectedScale;
+		// maximum += 50 / selectedScale;
 	}
 
 	return Math.min(Math.max(value, minimum), maximum);
@@ -188,6 +188,11 @@ function centerOn(id, animate) {
 				 )
 			.on("end", function() {
 				centeringAnimationOccuring = false;
+
+				d3.select(".fighterChart")
+					.transition()
+					.duration(600)
+					.attr("opacity", 1)
 				
 				// if simulation has ended, we need to restart it since
 				// most of the invisible nodes have been "clamped" to the
@@ -443,6 +448,7 @@ d3.csv("fighters.csv", function(data) {
 			var result1 = fight["f1result"];
 			var result2 = fight["f2result"];
 			var method = fight["method"];
+			var round = fight["round"];
 			var date = fight["event_date"].split("/");
 
 			var year = parseInt(date[2]);
@@ -459,6 +465,7 @@ d3.csv("fighters.csv", function(data) {
 							opponentName: name2,
 							opponentId: id2,
 							result: result1,
+							round: round,
 							method: method
 						}
 					);
@@ -469,6 +476,7 @@ d3.csv("fighters.csv", function(data) {
 							opponentName: name1,
 							opponentId: id1,
 							result: result2,
+							round: round,
 							method: method
 						}
 					);
@@ -994,7 +1002,7 @@ d3.csv("fighters.csv", function(data) {
 					minDate = new Date(minDate);
 					maxDate = new Date(maxDate);
 
-					var chartX = width / 2 + 50; //start of chart
+					var chartX = width / 2 + 100; //start of chart
 					var chartY = labelMargin;
 					
 					var chartWidth = width - chartX - 50;
@@ -1004,7 +1012,7 @@ d3.csv("fighters.csv", function(data) {
 						.domain([minDate, maxDate])
 						.range([chartX, chartX + chartWidth])
 
-					var roundValues = [-1, -2, -3, -4, -5, 5, 4, 3, 2, 1];
+					var roundValues = [-1, -2, -3, -4, -5, 0, 5, 4, 3, 2, 1];
 					var yScale = d3.scaleOrdinal()
 						.domain(roundValues)
 						.range(roundValues.map(
@@ -1021,11 +1029,18 @@ d3.csv("fighters.csv", function(data) {
 
 					var xAxis = d3.axisBottom()
 						.scale(xScale)
+						.ticks(d3.timeYear.every(1))
+						.tickFormat(function(d) {
+							return d.getFullYear();
+						})
 						.tickSizeOuter(0);
+
+					var tickValues = roundValues;
+					tickValues.splice(tickValues.indexOf(0), 1);
 					
 					var yAxis = d3.axisLeft()
 						.scale(yScale)
-						.tickValues(roundValues)
+						.tickValues(tickValues)
 						.tickFormat(function(d) { return Math.abs(d) });
 
 					// delete existing fighter chart (if there is one)
@@ -1039,6 +1054,11 @@ d3.csv("fighters.csv", function(data) {
 
 					var d3Chart = svg.append("g")
 						.attr("class", "fighterChart")
+						.attr("opacity", 0); // start off hidden -- gets made visible at end of centerOn
+					
+
+					d3Chart.append("g").attr("class", "xAxis");
+					d3Chart.append("g").attr("class", "yAxis");
 					
 					var fightCircles = d3Chart.append("g")
 						.attr("class", "fightCircle")
@@ -1046,15 +1066,39 @@ d3.csv("fighters.csv", function(data) {
 						.data(fighter.fightList)
 						.enter().append("g");
 
-					d3Chart.append("g").attr("class", "xAxis");
-					d3Chart.append("g").attr("class", "yAxis");
-
 					d3Chart.append("image")
 						.attr("xlink:href", "exit.png")
 						.attr("width", 20)
 						.attr("height", 20)
-						.attr("x", chartX + chartWidth)
+						.attr("x", chartX + chartWidth - 20)
 						.attr("y", chartY - 20)
+						.attr("cursor", "pointer")
+						.on("click", function () {
+							selectedFighterId = "";
+							tooltipFocusId = "";
+
+							d3.selectAll(".selected, .unselected")
+								.attr("cursor", "pointer")
+								.attr("pointer-events", "auto")
+								.classed("selected", false)
+								.classed("unselected", false);
+
+							d3.selectAll(".node circle")
+								.style("opacity", 1);
+
+							d3.selectAll(".link line")
+								.style("opacity", defaultLinkOpacity);
+
+							d3.select(".fighterChart")
+								.remove()
+
+							d3.selectAll(".weightLabel")
+								.style("visibility", "visible")
+							
+							hideAdjacentLabels(fighter.id);
+
+							regenerateInfoViz(getSelectedWeightClasses())
+						})
 
 					d3Chart.append("text")
 						.attr("font-family", "Arial")
@@ -1065,12 +1109,107 @@ d3.csv("fighters.csv", function(data) {
 						.text(fighter.name + "'s Fight History")
 					
 					svg.select(".xAxis")
-					.attr("transform", "translate(0, " + (chartY + chartHeight / 2) + ")")
-					.call(xAxis);
+						.attr("transform", "translate(0, " + yScale(0) + ")")
+						.call(xAxis);
 
 					svg.select(".yAxis")
-					.attr("transform", "translate(" + (chartX - 10) + ", 0)")
-					.call(yAxis);
+						.attr("transform", "translate(" + (chartX - 10) + ", 0)")
+						.call(yAxis);
+
+					var fightRadius = 6;
+
+					var winColor = "#00bb00";
+					var lossColor = "#bb0000";
+					var drawColor = "#bbbb00";
+
+					function getColor(result) {
+						if(result === "win") {
+							return winColor;
+						}
+						else if (result === "loss") {
+							return lossColor;
+						}
+						else {
+							return drawColor;
+						}
+
+						return "#bbbbbb";
+					}
+
+					fightCircles.append("line")
+						.classed("fightStem", true)
+						.attr("stroke", function(d) {
+							return getColor(d.result);
+						})
+						.attr("x1", function(d) {
+							return xScale(d.date);
+						})
+						.attr("x2", function(d) {
+							return xScale(d.date);
+						})
+						.attr("y1", function(d) {
+							// note: this doesn't accurately go to the center
+							// if the center has an offset. But offsets are
+							// aligned so the circles all touch, so this line
+							// will be hidden underneath anyways
+							if(d.result === "win") {
+								return yScale(d.round);
+							}
+							else if (d.result === "loss") {
+								return yScale(-d.round);
+							}
+
+							return yScale(0);
+						})
+						.attr("y2", function(d) {
+							return yScale(0);
+						})
+					
+					fightCircles.append("circle")
+						.classed("fightDot", true)
+						.attr("cx", function(d) {
+							return xScale(d.date);
+						})
+						.attr("cy", function(d) {
+							// fights earlier in the list that will overlap on the graph (same date, same round, same result)
+							var overlappingFights = [];
+							
+							for(var i = 0; i < fighter.fightList.indexOf(d); i++) {
+								var fight = fighter.fightList[i];
+
+								if(fight.date.getTime() === d.date.getTime() && fight.result === d.result && fight.round === d.round) {
+									overlappingFights.push(fight);
+								}
+							}
+
+							var offset = fightRadius * 2 * overlappingFights.length;
+
+							if(d.result === "win") {
+								return yScale(d.round) + offset;
+							}
+							else if (d.result === "loss") {
+								return yScale(-d.round) - offset;
+							}
+							else {
+								return yScale(0) - offset;
+							}
+							
+						})
+						.attr("r", fightRadius)
+						.attr("fill", function(d) {
+							return getColor(d.result);
+						})
+						.attr("stroke", function(d) {
+							var selection = d3.select(this);
+							
+							if(d.opponentId in fighters) {
+								var fill = selection.attr("fill");
+								return fill.replace("b", "9");
+							}
+							else {
+								return "#999999";
+							}
+						})
 				})
 
 			d3nodes.append("text")
@@ -1231,12 +1370,12 @@ d3.csv("fighters.csv", function(data) {
 							// toggle
 							selectedWeightClasses[closureValue] = !selectedWeightClasses[closureValue];
 
-							regenerateInfoViz(getSelectedWeightClasses(), null, null);
+							regenerateInfoViz(getSelectedWeightClasses());
 						}
 					})(wClass));
 			}
 		}
 
-		createInfoViz(getSelectedWeightClasses(), null, null);
+		createInfoViz(getSelectedWeightClasses());
 	});
 });

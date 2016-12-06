@@ -4,6 +4,11 @@
   cursor: pointer;
 }
 
+.fightDot {
+	stroke-width: 3px;
+	cursor: pointer;
+}
+
 .chart {
 	background: #dddddd;
 	margin: 0 auto;
