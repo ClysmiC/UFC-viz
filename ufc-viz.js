@@ -1004,7 +1004,7 @@ d3.csv("fighters.csv", function(data) {
 						.domain([minDate, maxDate])
 						.range([chartX, chartX + chartWidth])
 
-					var roundValues = [-5, -4, -3, -2, -1, 1, 2, 3, 4, 5];
+					var roundValues = [-1, -2, -3, -4, -5, 5, 4, 3, 2, 1];
 					var yScale = d3.scaleOrdinal()
 						.domain(roundValues)
 						.range(roundValues.map(
@@ -1012,8 +1012,10 @@ d3.csv("fighters.csv", function(data) {
 								var bot = chartY + chartHeight;
 								var top = chartY;
 
+								var index = roundValues.indexOf(d);
+
 								// linear interpolate
-								return bot + (top - bot) * (d + 5) / roundValues.length;
+								return bot + (top - bot) * (index) / roundValues.length;
 							})
 						);
 
@@ -1027,19 +1029,40 @@ d3.csv("fighters.csv", function(data) {
 						.tickFormat(function(d) { return Math.abs(d) });
 
 					// delete existing fighter chart (if there is one)
-					d3.selectAll(".fighterChart")
+					d3.selectAll(".fightCircle")
 						.data([])
 						.exit()
 						.remove()
-					
+
+					d3.select(".fighterChart")
+						.remove()
+
 					var d3Chart = svg.append("g")
 						.attr("class", "fighterChart")
-						.selectAll("fighterChart")
+					
+					var fightCircles = d3Chart.append("g")
+						.attr("class", "fightCircle")
+						.selectAll("fighterCircle")
 						.data(fighter.fightList)
 						.enter().append("g");
 
 					d3Chart.append("g").attr("class", "xAxis");
 					d3Chart.append("g").attr("class", "yAxis");
+
+					d3Chart.append("image")
+						.attr("xlink:href", "exit.png")
+						.attr("width", 20)
+						.attr("height", 20)
+						.attr("x", chartX + chartWidth)
+						.attr("y", chartY - 20)
+
+					d3Chart.append("text")
+						.attr("font-family", "Arial")
+						.attr("font-size", 24)
+						.attr("text-anchor", "middle")
+						.attr("x", chartX + chartWidth / 2)
+						.attr("y", chartY)
+						.text(fighter.name + "'s Fight History")
 					
 					svg.select(".xAxis")
 					.attr("transform", "translate(0, " + (chartY + chartHeight / 2) + ")")
