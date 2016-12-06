@@ -1,7 +1,4 @@
 // TODO:
-// - Tooltip on fight dot
-// - Highlight opponent when hovering over fight dot
-// - Highlight fight dot when hovering over opponent
 // - Axis labels on individual chart
 // - Disclaimer about >= 10 fights to be in network
 // - Asterisk on Y axis label - Disclaimer about 5 rounds for title fight
@@ -74,6 +71,12 @@ var d3nodes;
 var d3links;
 var d3simulation;
 
+var tooltip;
+var smallTooltip;
+var svg;
+
+var visibleFighters;
+
 // space allocated at top of svg exclusively for the labels
 var labelMargin = 80;
 
@@ -90,6 +93,9 @@ var selectedScale = 1;
 var centeringAnimationOccuring = false;
 
 var fightRadius = 6;
+var fightStrokeWidth = 3;
+
+var nodeStrokeWidth = 2.5;
 
 // Gets X position for the cluster or label of a given weight class
 // weightClass - class being queried
@@ -469,6 +475,496 @@ function isOpponentOf(queryId, fighterId) {
 	return false;
 }
 
+function fighterClicked(fighter) {
+	// hide old selection
+	if(selectedFighterId !== "") {
+		hideAdjacentLabels(selectedFighterId);
+	}
+	
+	selectedFighterId = fighter.id;
+	
+	// set tooltip to invisible
+	tooltip
+		.style("opacity", 0)
+	
+	// make all non-selected stuff invisible
+	d3.selectAll(".node circle")
+		.style("opacity", function(d) {
+			if(fighter.id === d.id) {
+				return 1;
+			}
+
+			for(var i = 0; i < fighter.fightList.length; i++) {
+				var opponentId = fighter.fightList[i].opponentId;
+
+				if (opponentId === d.id) {
+					return 1
+				}
+			}
+			
+			return 0;
+		})
+		.each(function(d) {
+			var selection = d3.select(this);
+			
+			if(fighter.id === d.id) {
+				selection.classed("unselected", false);
+				selection.classed("selected", true);
+				return;
+			}
+
+			for(var i = 0; i < fighter.fightList.length; i++) {
+				var opponentId = fighter.fightList[i].opponentId;
+
+				if (opponentId === d.id) {
+					selection.classed("unselected", false);
+					selection.classed("selected", true);
+					return;
+				}
+			}
+
+			selection.classed("unselected", true);
+			selection.classed("selected", false);
+			return;
+		})
+
+			// fade opacity of non-connected links
+			d3.selectAll(".link line")
+		.style("opacity", function(d) {
+			if(fighter.id === d.source.id ||
+			   fighter.id === d.target.id) {
+				return 1;
+			}
+
+			if(isOpponentOf(d.source.id, fighter.id) &&
+			   isOpponentOf(d.target.id, fighter.id)) {
+				return .1;
+			}
+			
+			return 0;
+		})
+		.each(function(d) {
+			var selection = d3.select(this);
+			
+			if(fighter.id === d.source.id ||
+			   fighter.id === d.target.id) {
+				selection.classed("unselected", false);
+				selection.classed("selected", true);
+				return;
+			}
+
+			if(isOpponentOf(d.source.id, fighter.id) &&
+			   isOpponentOf(d.target.id, fighter.id)) {
+				selection.classed("unselected", false);
+				selection.classed("selected", true);
+				return;
+			}
+			
+			selection.classed("unselected", true);
+			selection.classed("selected", false);
+		})
+
+			d3.selectAll(".unselected")
+		.attr("cursor", "default")
+		.attr("pointer-events", "none")
+
+	d3.selectAll(".selected")
+		.attr("cursor", "pointer")
+		.attr("pointer-events", "auto")
+
+	// Center on fighter and show labels
+	centerOn(fighter.id, true);
+	showAdjacentLabels(fighter.id, true);					
+
+	// Create chart for the selected fighter
+	var minDate = fighter.fightList[0].date;
+	var maxDate = fighter.fightList[0].date;
+
+	for(var i = 1; i < fighter.fightList.length; i++) {
+		var fight = fighter.fightList[i];
+		minDate = Math.min(minDate, fight.date);
+		maxDate = Math.max(maxDate, fight.date);
+	}
+
+	// re-cast to Date, b/c min/max return raw integer form
+	minDate = new Date(minDate);
+	maxDate = new Date(maxDate);
+
+	var chartX = width / 2 + 100; //start of chart
+	var chartY = labelMargin * 1.5;
+	
+	var chartWidth = width - chartX - 50;
+	var chartHeight = height - chartY - labelMargin;
+	
+	var xScale = d3.scaleTime()
+		.domain([minDate, maxDate])
+		.range([chartX, chartX + chartWidth])
+
+	var roundValues = [-1, -2, -3, -4, -5, 0, 5, 4, 3, 2, 1];
+	var yScale = d3.scaleOrdinal()
+		.domain(roundValues)
+		.range(roundValues.map(
+			function(d) {
+				var bot = chartY + chartHeight;
+				var top = chartY;
+
+				var index = roundValues.indexOf(d);
+
+				// linear interpolate
+				return bot + (top - bot) * (index) / roundValues.length;
+			})
+			  );
+
+	var xAxis = d3.axisBottom()
+		.scale(xScale)
+		.ticks(d3.timeYear.every(1))
+		.tickFormat(function(d) {
+			return d.getFullYear();
+		})
+		.tickSizeOuter(0);
+
+	var tickValues = roundValues;
+	tickValues.splice(tickValues.indexOf(0), 1);
+	
+	var yAxis = d3.axisLeft()
+		.scale(yScale)
+		.tickValues(tickValues)
+		.tickFormat(function(d) { return Math.abs(d) });
+
+	// delete existing fighter chart (if there is one)
+	d3.selectAll(".fightCircle")
+		.data([])
+		.exit()
+		.remove()
+
+	d3.select(".fighterChart")
+		.remove()
+
+	var d3Chart = svg.append("g")
+		.attr("class", "fighterChart")
+		.attr("opacity", 0); // start off hidden -- gets made visible at end of centerOn
+	
+
+	d3Chart.append("g").attr("class", "xAxis");
+	d3Chart.append("g").attr("class", "yAxis");
+	
+	var fightCircles = d3Chart.append("g")
+		.attr("class", "fightCircle")
+		.selectAll("fighterCircle")
+		.data(fighter.fightList)
+		.enter().append("g");
+
+	d3Chart.append("image")
+		.attr("xlink:href", "exit.png")
+		.attr("width", 20)
+		.attr("height", 20)
+		.attr("x", chartX + chartWidth - 20)
+		.attr("y", chartY - 20)
+		.attr("cursor", "pointer")
+		.on("click", function () {
+			selectedFighterId = "";
+			tooltipFocusId = "";
+
+			d3.selectAll(".selected, .unselected")
+				.attr("cursor", "pointer")
+				.attr("pointer-events", "auto")
+				.classed("selected", false)
+				.classed("unselected", false);
+
+			d3.selectAll(".node circle")
+				.style("opacity", 1);
+
+			d3.selectAll(".link line")
+				.style("opacity", defaultLinkOpacity);
+
+			d3.select(".fighterChart")
+				.remove()
+
+			d3.selectAll(".weightLabel")
+				.style("visibility", "visible")
+			
+			hideAdjacentLabels(fighter.id);
+
+			createInfoViz(getSelectedWeightClasses(), minFightCount)
+		})
+
+	d3Chart.append("text")
+		.attr("font-family", "Arial")
+		.attr("font-size", 24)
+		.attr("text-anchor", "middle")
+		.attr("x", chartX + chartWidth / 2)
+		.attr("y", chartY)
+		.text(fighter.name + "'s Fight History")
+	
+	svg.select(".xAxis")
+		.attr("transform", "translate(0, " + yScale(0) + ")")
+		.call(xAxis);
+
+	svg.select(".yAxis")
+		.attr("transform", "translate(" + (chartX - 10) + ", 0)")
+		.call(yAxis);
+
+	var winColor = "#00bb00";
+	var lossColor = "#bb0000";
+	var drawColor = "#bbbb00";
+
+	function getColor(result) {
+		if(result === "win") {
+			return winColor;
+		}
+		else if (result === "loss") {
+			return lossColor;
+		}
+		else {
+			return drawColor;
+		}
+
+		return "#bbbbbb";
+	}
+
+	fightCircles.append("line")
+		.classed("fightStem", true)
+		.attr("stroke", function(d) {
+			return getColor(d.result);
+		})
+		.attr("x1", function(d) {
+			return xScale(d.date);
+		})
+		.attr("x2", function(d) {
+			return xScale(d.date);
+		})
+		.attr("y1", function(d) {
+			// note: this doesn't accurately go to the center
+			// if the center has an offset. But offsets are
+			// aligned so the circles all touch, so this line
+			// will be hidden underneath anyways
+			if(d.result === "win") {
+				return yScale(d.round);
+			}
+			else if (d.result === "loss") {
+				return yScale(-d.round);
+			}
+
+			return yScale(0);
+		})
+		.attr("y2", function(d) {
+			return yScale(0);
+		})
+	
+	fightCircles.append("circle")
+		.classed("fightDot", true)
+		.attr("cx", function(d) {
+			return xScale(d.date);
+		})
+		.attr("cy", function(d) {
+			// fights earlier in the list that will overlap on the graph (same date, same round, same result)
+			var overlappingFights = [];
+			
+			for(var i = 0; i < fighter.fightList.indexOf(d); i++) {
+				var fight = fighter.fightList[i];
+
+				if(fight.date.getTime() === d.date.getTime() && fight.result === d.result && fight.round === d.round) {
+					overlappingFights.push(fight);
+				}
+			}
+
+			var offset = fightRadius * 2 * overlappingFights.length;
+
+			if(d.result === "win") {
+				return yScale(d.round) + offset;
+			}
+			else if (d.result === "loss") {
+				return yScale(-d.round) - offset;
+			}
+			else {
+				return yScale(0) - offset;
+			}
+			
+		})
+		.attr("r", fightRadius)
+		.attr("fill", function(d) {
+			return getColor(d.result);
+		})
+		.attr("stroke", function(d) {
+			var selection = d3.select(this);
+			
+			var color;
+			if(d.opponentId in visibleFighters) {
+				color = selection.attr("fill");
+				color = color.replace("b", "9");
+			}
+			else {
+				color = "#bbbbbb";
+			}
+
+			// cache
+			d.defaultStroke = color;
+
+			return color;
+		})
+		.on("mouseover", function(d) {
+			var selection = d3.select(this);
+			selection
+				.attr("stroke", "#000000");
+			
+			var winner = (d.result === "win") ? fighter.name : (d.result === "loss") ? d.opponentName : "draw";
+			var nameString = "";
+			var resultString = "";
+			
+			// Create tooltip
+			if(d.result === "win") {
+				resultString += "Win by " + d.method + " (" + d.details + ")";
+			}
+			else if (d.result === "loss") {
+				resultString += "Loss by " + d.method + " (" + d.details + ")";
+			}
+			else {
+				resultString += "Draw";
+			}
+
+			var dateString = d.date.toISOString().slice(0, 10);
+			
+			// var htmlString = nameString;
+			// htmlString += "<hr>";
+			var leftString = getTooltipHTMLForFighter(fighter.id, true);
+			var rightString = getTooltipHTMLForFighter(d.opponentId, true);
+
+			htmlString = "<table class='ttTable'>"
+			htmlString += "<tr><th>" + fighter.name + "</th><th> vs. </th><th>" + d.opponentName + "</th>"
+			htmlString += "<tr><td>" + leftString + "</td><td></td><td>" + rightString + "</td></tr>";
+			htmlString += "</table>";
+
+			htmlString += "<hr>";
+			htmlString += "Date: " + dateString;
+			htmlString += "<br>";
+			htmlString += resultString;
+			htmlString += "<br>";
+			htmlString += d.round + " rounds";
+
+			
+			smallTooltip.html(htmlString);
+			placeFightTooltip(smallTooltip, selection);
+			
+
+			smallTooltip.transition()
+				.duration(0)
+				.style("opacity", 1);
+
+			var circle = getSvgCircleForFighter(d.opponentId);
+
+
+			// highlight node
+			d3.selectAll(".node circle")
+				.filter(".selected")
+				.transition()
+				.duration(100)
+				.style("opacity", function(nodeD) {
+					if(fighter.id === nodeD.id || d.opponentId === nodeD.id) {
+						return 1;
+					}
+					
+					return .1;
+				})
+				.style("stroke", function(nodeD) {
+					if(fighter.id === nodeD.id || d.opponentId === nodeD.id) {
+						return "#000000";
+					}
+					
+					return "#FFFFFF";
+				})
+
+			// highlight link
+			d3.selectAll(".link line")
+				.filter(".selected")
+				.transition()
+				.duration(100)
+				.style("opacity", function(linkD) {
+					if((d.opponentId === linkD.source.id && fighter.id === linkD.target.id) ||
+					   d.opponentId === linkD.target.id && fighter.id === linkD.source.id) {
+						return 1;
+					}
+					
+					return .1;
+				})
+				.style("stroke", function(linkD) {
+					if((d.opponentId === linkD.source.id && fighter.id === linkD.target.id) ||
+					   d.opponentId === linkD.target.id && fighter.id === linkD.source.id) {
+						return "#000000";
+					}
+					
+					return defaultLinkStroke;
+				})
+		})
+		.on("mouseout", function(d) {
+			var selection = d3.select(this);
+			selection
+				.attr("stroke", d.defaultStroke);
+			
+			smallTooltip.transition()
+				.duration(100)
+				.style("opacity", 0);
+
+			// restore opacity of other fighters
+			d3.selectAll(".node circle")
+				.filter(".selected")
+				.transition()
+				.duration(100)
+				.style("opacity", 1)
+				.style("stroke", "#FFFFFF")
+
+			// restore opacity of other links
+			d3.selectAll(".link line")
+				.filter(".selected")
+				.transition()
+				.duration(100)
+				.style("opacity", defaultLinkOpacity)
+				.style("stroke", defaultLinkStroke)
+		})
+		.on("click", function(d) {
+			if(d.opponentId in visibleFighters) {
+				d3.select("#smallTooltip")
+					.style("opacity", 0);
+
+				////////////
+				// COPY-PASTED from mouseout because dispatching virtual
+				// event isn't working, javascript sucks, and I'm tired
+				//
+				{
+					var selection = d3.select(this);
+					selection
+						.attr("stroke", d.defaultStroke);
+					
+					smallTooltip.transition()
+						.duration(100)
+						.style("opacity", 0);
+
+					// restore opacity of other fighters
+					d3.selectAll(".node circle")
+						.filter(".selected")
+						.transition()
+						.duration(100)
+						.style("opacity", 1)
+						.style("stroke", "#FFFFFF")
+
+					// restore opacity of other links
+					d3.selectAll(".link line")
+						.filter(".selected")
+						.transition()
+						.duration(100)
+						.style("opacity", defaultLinkOpacity)
+						.style("stroke", defaultLinkStroke)
+				}
+				//
+				//
+				// END COPY PASTE
+				///////////
+
+				
+				fighterClicked(fighters[d.opponentId]);
+			}
+		})
+}
+
 
 d3.csv("fighters.csv", function(data) {
 	// Load all fighter data into memory
@@ -629,19 +1125,19 @@ d3.csv("fighters.csv", function(data) {
 		}
 
 		// Insert DOM elements needed (svg, tooltips)
-		var svg = d3.select(".chart").append("svg")
+		svg = d3.select(".chart").append("svg")
 			.attr("width", width)
 			.attr("height", height)
 			.attr("class", "svg")
 			.attr("id", "theSvg");
 
-		var tooltip = d3.select(".chart").append("div");
+		tooltip = d3.select(".chart").append("div");
 		tooltip
 			.classed("tooltip", true)
 			.classed("largeTooltip", true)
 			.style("opacity", 0);
 
-		var smallTooltip = d3.select(".chart").append("div");
+		smallTooltip = d3.select(".chart").append("div");
 		smallTooltip
 			.classed("tooltip", true)
 			.classed("smallTooltip", true)
@@ -716,7 +1212,7 @@ d3.csv("fighters.csv", function(data) {
 			var nodes = [];
 			var links = [];
 
-			var visibleFighters = {};
+			visibleFighters = {};
 			
 			// fighters is a dict, so iterate by key
 			for(var id in fighters) {
@@ -909,6 +1405,32 @@ d3.csv("fighters.csv", function(data) {
 						// show name labels of connected fighters
 						showAdjacentLabels(fighter.id, false);
 					}
+					else {
+						d3.selectAll(".fightDot")
+							.transition()
+							.duration(100)
+							.style("stroke", function(d) {
+								if(d.opponentId === fighter.id) {
+									return "#000000";
+								}
+								
+								return d.defaultStroke;
+							})
+							.style("stroke-width", function(d) {
+								if(d.opponentId === fighter.id) {
+									return fightStrokeWidth * 1.5 + "px";
+								}
+								
+								return fightStrokeWidth + "px";
+							})
+							.attr("r", function(d) {
+								if(d.opponentId === fighter.id) {
+									return fightRadius * 2;
+								}
+								
+								return fightRadius;
+							})
+					}
 				})
 				.on("mouseout", function(fighter) {
 					// hide tooltip
@@ -944,390 +1466,17 @@ d3.csv("fighters.csv", function(data) {
 						}
 					}
 
-				})
-				.on("click", function(fighter) {
-					// hide old selection
-					if(selectedFighterId !== "") {
-						hideAdjacentLabels(selectedFighterId);
-					}
-					
-					selectedFighterId = fighter.id;
-					
-					// set tooltip to invisible
-					tooltip
-						.style("opacity", 0)
-					
-					// make all non-selected stuff invisible
-					d3.selectAll(".node circle")
-						.style("opacity", function(d) {
-							if(fighter.id === d.id) {
-								return 1;
-							}
-
-							for(var i = 0; i < fighter.fightList.length; i++) {
-								var opponentId = fighter.fightList[i].opponentId;
-
-								if (opponentId === d.id) {
-									return 1
-								}
-							}
-							
-							return 0;
+					d3.selectAll(".fightDot")
+						.transition()
+						.duration(100)
+						.style("stroke", function(d) {
+							return d.defaultStroke;
 						})
-						.each(function(d) {
-							var selection = d3.select(this);
-							
-							if(fighter.id === d.id) {
-								selection.classed("unselected", false);
-								selection.classed("selected", true);
-								return;
-							}
-
-							for(var i = 0; i < fighter.fightList.length; i++) {
-								var opponentId = fighter.fightList[i].opponentId;
-
-								if (opponentId === d.id) {
-									selection.classed("unselected", false);
-									selection.classed("selected", true);
-									return;
-								}
-							}
-
-							selection.classed("unselected", true);
-							selection.classed("selected", false);
-							return;
-						})
-
-					// fade opacity of non-connected links
-					d3.selectAll(".link line")
-						.style("opacity", function(d) {
-							if(fighter.id === d.source.id ||
-							   fighter.id === d.target.id) {
-								return 1;
-							}
-
-							if(isOpponentOf(d.source.id, fighter.id) &&
-							   isOpponentOf(d.target.id, fighter.id)) {
-								return .1;
-							}
-							
-							return 0;
-						})
-						.each(function(d) {
-							var selection = d3.select(this);
-							
-							if(fighter.id === d.source.id ||
-							   fighter.id === d.target.id) {
-								selection.classed("unselected", false);
-								selection.classed("selected", true);
-							}
-
-							if(isOpponentOf(d.source.id, fighter.id) &&
-							   isOpponentOf(d.target.id, fighter.id)) {
-								selection.classed("unselected", false);
-								selection.classed("selected", true);
-							}
-							
-							selection.classed("unselected", true);
-							selection.classed("selected", false);
-						})
-
-					d3.selectAll(".unselected")
-						.attr("cursor", "default")
-						.attr("pointer-events", "none")
-
-					d3.selectAll(".selected")
-						.attr("cursor", "pointer")
-						.attr("pointer-events", "auto")
-
-					// Center on fighter and show labels
-					centerOn(fighter.id, true);
-					showAdjacentLabels(fighter.id, true);					
-
-					// Create chart for the selected fighter
-					var minDate = fighter.fightList[0].date;
-					var maxDate = fighter.fightList[0].date;
-
-					for(var i = 1; i < fighter.fightList.length; i++) {
-						var fight = fighter.fightList[i];
-						minDate = Math.min(minDate, fight.date);
-						maxDate = Math.max(maxDate, fight.date);
-					}
-
-					// re-cast to Date, b/c min/max return raw integer form
-					minDate = new Date(minDate);
-					maxDate = new Date(maxDate);
-
-					var chartX = width / 2 + 100; //start of chart
-					var chartY = labelMargin * 1.5;
-					
-					var chartWidth = width - chartX - 50;
-					var chartHeight = height - chartY - labelMargin;
-					
-					var xScale = d3.scaleTime()
-						.domain([minDate, maxDate])
-						.range([chartX, chartX + chartWidth])
-
-					var roundValues = [-1, -2, -3, -4, -5, 0, 5, 4, 3, 2, 1];
-					var yScale = d3.scaleOrdinal()
-						.domain(roundValues)
-						.range(roundValues.map(
-							function(d) {
-								var bot = chartY + chartHeight;
-								var top = chartY;
-
-								var index = roundValues.indexOf(d);
-
-								// linear interpolate
-								return bot + (top - bot) * (index) / roundValues.length;
-							})
-						);
-
-					var xAxis = d3.axisBottom()
-						.scale(xScale)
-						.ticks(d3.timeYear.every(1))
-						.tickFormat(function(d) {
-							return d.getFullYear();
-						})
-						.tickSizeOuter(0);
-
-					var tickValues = roundValues;
-					tickValues.splice(tickValues.indexOf(0), 1);
-					
-					var yAxis = d3.axisLeft()
-						.scale(yScale)
-						.tickValues(tickValues)
-						.tickFormat(function(d) { return Math.abs(d) });
-
-					// delete existing fighter chart (if there is one)
-					d3.selectAll(".fightCircle")
-						.data([])
-						.exit()
-						.remove()
-
-					d3.select(".fighterChart")
-						.remove()
-
-					var d3Chart = svg.append("g")
-						.attr("class", "fighterChart")
-						.attr("opacity", 0); // start off hidden -- gets made visible at end of centerOn
-					
-
-					d3Chart.append("g").attr("class", "xAxis");
-					d3Chart.append("g").attr("class", "yAxis");
-					
-					var fightCircles = d3Chart.append("g")
-						.attr("class", "fightCircle")
-						.selectAll("fighterCircle")
-						.data(fighter.fightList)
-						.enter().append("g");
-
-					d3Chart.append("image")
-						.attr("xlink:href", "exit.png")
-						.attr("width", 20)
-						.attr("height", 20)
-						.attr("x", chartX + chartWidth - 20)
-						.attr("y", chartY - 20)
-						.attr("cursor", "pointer")
-						.on("click", function () {
-							selectedFighterId = "";
-							tooltipFocusId = "";
-
-							d3.selectAll(".selected, .unselected")
-								.attr("cursor", "pointer")
-								.attr("pointer-events", "auto")
-								.classed("selected", false)
-								.classed("unselected", false);
-
-							d3.selectAll(".node circle")
-								.style("opacity", 1);
-
-							d3.selectAll(".link line")
-								.style("opacity", defaultLinkOpacity);
-
-							d3.select(".fighterChart")
-								.remove()
-
-							d3.selectAll(".weightLabel")
-								.style("visibility", "visible")
-							
-							hideAdjacentLabels(fighter.id);
-
-							createInfoViz(getSelectedWeightClasses(), minFightCount)
-						})
-
-					d3Chart.append("text")
-						.attr("font-family", "Arial")
-						.attr("font-size", 24)
-						.attr("text-anchor", "middle")
-						.attr("x", chartX + chartWidth / 2)
-						.attr("y", chartY)
-						.text(fighter.name + "'s Fight History")
-					
-					svg.select(".xAxis")
-						.attr("transform", "translate(0, " + yScale(0) + ")")
-						.call(xAxis);
-
-					svg.select(".yAxis")
-						.attr("transform", "translate(" + (chartX - 10) + ", 0)")
-						.call(yAxis);
-
-					var winColor = "#00bb00";
-					var lossColor = "#bb0000";
-					var drawColor = "#bbbb00";
-
-					function getColor(result) {
-						if(result === "win") {
-							return winColor;
-						}
-						else if (result === "loss") {
-							return lossColor;
-						}
-						else {
-							return drawColor;
-						}
-
-						return "#bbbbbb";
-					}
-
-					fightCircles.append("line")
-						.classed("fightStem", true)
-						.attr("stroke", function(d) {
-							return getColor(d.result);
-						})
-						.attr("x1", function(d) {
-							return xScale(d.date);
-						})
-						.attr("x2", function(d) {
-							return xScale(d.date);
-						})
-						.attr("y1", function(d) {
-							// note: this doesn't accurately go to the center
-							// if the center has an offset. But offsets are
-							// aligned so the circles all touch, so this line
-							// will be hidden underneath anyways
-							if(d.result === "win") {
-								return yScale(d.round);
-							}
-							else if (d.result === "loss") {
-								return yScale(-d.round);
-							}
-
-							return yScale(0);
-						})
-						.attr("y2", function(d) {
-							return yScale(0);
-						})
-					
-					fightCircles.append("circle")
-						.classed("fightDot", true)
-						.attr("cx", function(d) {
-							return xScale(d.date);
-						})
-						.attr("cy", function(d) {
-							// fights earlier in the list that will overlap on the graph (same date, same round, same result)
-							var overlappingFights = [];
-							
-							for(var i = 0; i < fighter.fightList.indexOf(d); i++) {
-								var fight = fighter.fightList[i];
-
-								if(fight.date.getTime() === d.date.getTime() && fight.result === d.result && fight.round === d.round) {
-									overlappingFights.push(fight);
-								}
-							}
-
-							var offset = fightRadius * 2 * overlappingFights.length;
-
-							if(d.result === "win") {
-								return yScale(d.round) + offset;
-							}
-							else if (d.result === "loss") {
-								return yScale(-d.round) - offset;
-							}
-							else {
-								return yScale(0) - offset;
-							}
-							
-						})
+						.style("stroke-width", fightStrokeWidth + "px")
 						.attr("r", fightRadius)
-						.attr("fill", function(d) {
-							return getColor(d.result);
-						})
-						.attr("stroke", function(d) {
-							var selection = d3.select(this);
-							
-							var color;
-							if(d.opponentId in visibleFighters) {
-								color = selection.attr("fill");
-								color = color.replace("b", "9");
-							}
-							else {
-								color = "#bbbbbb";
-							}
 
-							// cache
-							d.defaultStroke = color;
-
-							return color;
-						})
-						.on("mouseover", function(d) {
-							var selection = d3.select(this);
-							selection
-								.attr("stroke", "#000000");
-							
-							var winner = (d.result === "win") ? fighter.name : (d.result === "loss") ? d.opponentName : "draw";
-							var nameString = "";
-							var resultString = "";
-							
-							// Create tooltip
-							if(d.result === "win") {
-								resultString += "Win by " + d.method + " (" + d.details + ")";
-							}
-							else if (d.result === "loss") {
-								resultString += "Loss by " + d.method + " (" + d.details + ")";
-							}
-							else {
-								resultString += "Draw";
-							}
-
-							var dateString = d.date.toISOString().slice(0, 10);
-							
-							// var htmlString = nameString;
-							// htmlString += "<hr>";
-							var leftString = getTooltipHTMLForFighter(fighter.id, true);
-							var rightString = getTooltipHTMLForFighter(d.opponentId, true);
-
-							htmlString = "<table class='ttTable'>"
-							htmlString += "<tr><th>" + fighter.name + "</th><th> vs. </th><th>" + d.opponentName + "</th>"
-							htmlString += "<tr><td>" + leftString + "</td><td></td><td>" + rightString + "</td></tr>";
-							htmlString += "</table>";
-
-							htmlString += "<hr>";
-							htmlString += "Date: " + dateString;
-							htmlString += "<br>";
-							htmlString += resultString;
-							htmlString += "<br>";
-							htmlString += d.round + " rounds";
-
-							
-							smallTooltip.html(htmlString);
-							placeFightTooltip(smallTooltip, selection);
-							
-
-							smallTooltip.transition()
-								.duration(0)
-								.style("opacity", 1);
-						})
-						.on("mouseout", function(d) {
-							var selection = d3.select(this);
-							selection
-								.attr("stroke", d.defaultStroke);
-							
-							smallTooltip.transition()
-								.duration(100)
-								.style("opacity", 0);
-						})
 				})
+				.on("click", fighterClicked)
 
 			d3nodes.append("text")
 				.text(function(d) { return d.name })
@@ -1342,7 +1491,6 @@ d3.csv("fighters.csv", function(data) {
 				.attr("font-size", 12)
 
 			function ticked() {
-				
 				if(selectedFighterId !== "") {
 					centerOn(selectedFighterId, false);
 				}
@@ -1553,10 +1701,10 @@ document.getElementById("searchSubmit").addEventListener("click", function() {
 		})
 		.style("stroke-width", function(d) {
 			if(d.name.toLowerCase().indexOf(name.toLowerCase()) === -1) {
-				return "2px";
+				return nodeStrokeWidth + "px";
 			}
 			
-			return "6px";
+			return nodeStrokeWidth * 1.5 + "px";
 		})
 		.transition("restore")
 		.delay(500)
@@ -1568,7 +1716,7 @@ document.getElementById("searchSubmit").addEventListener("click", function() {
 			return "#FFFFFF";
 		})
 		.style("stroke-width", function(d) {
-			return "2px";
+			return nodeStrokeWidth + "px";
 		})
 
 		d3.selectAll(".fightDot")
@@ -1590,10 +1738,10 @@ document.getElementById("searchSubmit").addEventListener("click", function() {
 		})
 		.style("stroke-width", function(d) {
 			if(d.opponentName.toLowerCase().indexOf(name.toLowerCase()) === -1) {
-				return "3px";
+				return fightStrokeWidth + "px";
 			}
 			
-			return "5px";
+			return fightStrokeWidth * 1.5 + "px";
 		})
 		.transition("restore")
 		.delay(500)
@@ -1605,7 +1753,7 @@ document.getElementById("searchSubmit").addEventListener("click", function() {
 			return d.defaultStroke;
 		})
 		.style("stroke-width", function(d) {
-			return "3px";
+			return fightStrokeWidth + "px";
 		})
 	
 	return false;
