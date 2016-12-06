@@ -87,8 +87,6 @@ var selectedTranslateX = 0;
 var selectedTranslateY = 0;
 var selectedScale = 1;
 
-var centeringAnimationOccuring = false;
-
 var fightRadius = 6;
 var fightStrokeWidth = 3;
 
@@ -109,7 +107,7 @@ function getXForWeightClass(weightClass, weightClassList) {
 
 	if(i === -1) return -1;
 
-	var margin = 25;
+	var margin = 50;
 	
 	return margin + (width - 2 * margin) / weightClassList.length * (i + .5);
 }
@@ -201,11 +199,7 @@ function clampY(value) {
 	return Math.min(Math.max(value, minimum), maximum);
 }
 
-function centerOn(id, animate) {
-	if(centeringAnimationOccuring) {
-		return
-	}
-	
+function centerOn(id) {
 	var x = getSvgCircleForFighter(id).attr("cx");
 	var y = getSvgCircleForFighter(id).attr("cy");
 
@@ -216,46 +210,67 @@ function centerOn(id, animate) {
 	var deltaX = targetX - x * targetScale;
 	var deltaY = targetY - y * targetScale;
 
-	if(animate && !centeringAnimationOccuring) {
-		// move visible stuff to left half of screen
-		d3.selectAll(".node, .link")
-			.transition()
-			.duration(500)
-			.attr("transform",
-				  "translate(" + deltaX + "," + deltaY + ")" +
-				  "scale(" + targetScale + " " + targetScale +")"
-				 )
-			.on("end", function() {
-				centeringAnimationOccuring = false;
-
-				d3.select(".fighterChart")
-					.transition()
-					.duration(600)
-					.attr("opacity", 1)
-				
-				// if simulation has ended, we need to restart it since
-				// most of the invisible nodes have been "clamped" to the
-				// sides of our visible area. But if we move towards those
-				// nodes, we want to re-simulate since they might not
-				// get clamped once the view has shifted
-				d3simulation.restart();
-			})
-		
-		centeringAnimationOccuring = true;
-	}
-	else {
-		// non-animated.... instant
-		d3.selectAll(".node, .link")
-			.attr("transform",
-				  "translate(" + deltaX + "," + deltaY + ")" +
-				  "scale(" + targetScale + " " + targetScale +")"
-				 )
-	}
-
+	// move visible stuff to left half of screen
+	d3.selectAll(".node, .link")
+		.transition()
+		.duration(500)
+		.attr("transform",
+			  "translate(" + deltaX + "," + deltaY + ")" +
+			  "scale(" + targetScale + " " + targetScale +")"
+			 )
+		.on("end", function() {
+			d3.select(".fighterChart")
+				.transition()
+				.duration(600)
+				.attr("opacity", 1)
+			
+			// if simulation has ended, we need to restart it since
+			// most of the invisible nodes have been "clamped" to the
+			// sides of our visible area. But if we move towards those
+			// nodes, we want to re-simulate since they might not
+			// get clamped once the view has shifted
+			d3simulation.tick();
+		})
 
 	selectedTranslateX = deltaX;
 	selectedTranslateY = deltaY;
 	selectedScale = targetScale;
+
+	clampAndPositionNetwork();
+}
+
+function clampAndPositionNetwork() {
+	d3nodes.selectAll("circle")
+		.attr("cx", function(d) { return clampX(d.x); })
+		.attr("cy", function(d) { return clampY(d.y); });
+
+
+	// I have no clue why, but calculating the positions for the labels
+	// takes an extremely long time, especially after the weight class
+	// filters have been toggled on/off many times.
+	// As a workaround, the positions will ONLY be updated when they are
+	// supposed to be visible anyways
+	if(tooltipFocusId !== "" || selectedFighterId !== "") {
+		var opponentIds;
+		
+		if(selectedFighterId !== "") {
+			opponentIds = getOpponentIds(selectedFighterId);
+			opponentIds.push(selectedFighterId); // hack: display the selected fighter too
+		}
+		else {
+			opponentIds = getOpponentIds(tooltipFocusId);
+		}
+		
+		for(var i = 0; i < opponentIds.length; i++) {
+			placeLabel(opponentIds[i]);
+		}
+	}
+
+	d3links
+		.attr("x1", function(d) { return clampX(d.source.x); })
+		.attr("y1", function(d) { return clampY(d.source.y); })
+		.attr("x2", function(d) { return clampX(d.target.x); })
+		.attr("y2", function(d) { return clampY(d.target.y); });
 }
 
 // instead of iterating over all labels and hiding them
@@ -570,7 +585,7 @@ function fighterClicked(fighter) {
 		.attr("pointer-events", "auto")
 
 	// Center on fighter and show labels
-	centerOn(fighter.id, true);
+	centerOn(fighter.id);
 	showAdjacentLabels(fighter.id, true);					
 
 	// Create chart for the selected fighter
@@ -1229,7 +1244,6 @@ d3.csv("fighters.csv", function(data) {
 			
 			// Clear whatever is currently on the svg
 			svg.selectAll("*").remove();
-			
 
 			function filter(id) {
 				return wClasses.indexOf(fighters[id].wClass) !== -1 &&
@@ -1299,10 +1313,9 @@ d3.csv("fighters.csv", function(data) {
 			}
 
 			var percentOfFightersVisible = nodes.length / Object.keys(visibleFighters).length;
-				  
-			d3simulation = d3.forceSimulation()
+			
+			d3simulation = d3.forceSimulation().stop()
 				.nodes(nodes)
-				.on("tick", ticked)
 				.force(
 					"link",
 					// This force attracts nodes that are connected
@@ -1353,7 +1366,7 @@ d3.csv("fighters.csv", function(data) {
 						return labelMargin + (height - labelMargin) / 2;
 					})
 				);
-
+			
 			d3links = svg.append("g")
 				.attr("class", "link")
 				.selectAll("line")
@@ -1523,178 +1536,153 @@ d3.csv("fighters.csv", function(data) {
 				.style("opacity", 0)
 				.attr("font-size", 12)
 
-			function ticked() {
-				if(selectedFighterId !== "") {
-					centerOn(selectedFighterId, false);
-				}
-				   
-				d3nodes.selectAll("circle")
-					.attr("cx", function(d) { return clampX(d.x); })
-					.attr("cy", function(d) { return clampY(d.y); });
+			// simulate then display
+			showSpinner();
 
-
-				// I have no clue why, but calculating the positions for the labels
-				// takes an extremely long time, especially after the weight class
-				// filters have been toggled on/off many times.
-				// As a workaround, the positions will ONLY be updated when they are
-				// supposed to be visible anyways
-				if(tooltipFocusId !== "" || selectedFighterId !== "") {
-					var opponentIds;
-					
-					if(selectedFighterId !== "") {
-						opponentIds = getOpponentIds(selectedFighterId);
-						opponentIds.push(selectedFighterId); // hack: display the selected fighter too
-					}
-					else {
-						opponentIds = getOpponentIds(tooltipFocusId);
-					}
-					
-					for(var i = 0; i < opponentIds.length; i++) {
-						placeLabel(opponentIds[i]);
-					}
+			setTimeout(function() {
+				for(var i = 500; i > 0; --i) {
+					d3simulation.tick();
 				}
 
-				d3links
-					.attr("x1", function(d) { return clampX(d.source.x); })
-					.attr("y1", function(d) { return clampY(d.source.y); })
-					.attr("x2", function(d) { return clampX(d.target.x); })
-					.attr("y2", function(d) { return clampY(d.target.y); });
+				clampAndPositionNetwork();
 
 				if(tooltipFocusId !== "" && selectedFighterId !== "") {
 					placeFighterTooltip(tooltip);
 				}
-			}
 
-			// Create weight class labels
-			for(var i = 0; i < visibleWeightClasses.length; i++) {
-				var wClass = visibleWeightClasses[i];
-				
-				svg.append("text")
-					.attr("x", getXForWeightClass(wClass, visibleWeightClasses))
-					.attr("y", function() {
-						if(i % 2 === 0) {
-							return labelMargin / 3;
-						}
-						else {
-							return 2 * labelMargin / 3;
-						}
-					})
-					.attr("text-anchor", "middle")
-					.attr("font-size", labelMargin / 3.5)
-					.attr("fill", (function(closureValue) {
-						return function() {
-							if(selectedWeightClasses[closureValue]) {
-								return color(weightClasses.indexOf(closureValue));
+				// Create weight class labels
+				for(var i = 0; i < visibleWeightClasses.length; i++) {
+					var wClass = visibleWeightClasses[i];
+					
+					svg.append("text")
+						.attr("x", getXForWeightClass(wClass, visibleWeightClasses))
+						.attr("y", function() {
+							if(i % 2 === 0) {
+								return labelMargin / 3;
 							}
 							else {
-								return "#aaaaaa";
+								return 2 * labelMargin / 3;
 							}
-						}
-					})(wClass))
-					.attr("text-decoration", (function(closureValue) {
-						return function() {
-							if(selectedWeightClasses[closureValue]) {
-								return "none";
+						})
+						.attr("text-anchor", "middle")
+						.attr("font-size", labelMargin / 3.5)
+						.attr("fill", (function(closureValue) {
+							return function() {
+								if(selectedWeightClasses[closureValue]) {
+									return color(weightClasses.indexOf(closureValue));
+								}
+								else {
+									return "#aaaaaa";
+								}
 							}
-							else {
-								return "line-through";
+						})(wClass))
+						.attr("text-decoration", (function(closureValue) {
+							return function() {
+								if(selectedWeightClasses[closureValue]) {
+									return "none";
+								}
+								else {
+									return "line-through";
+								}
 							}
-						}
-					})(wClass))
-					.text(wClass)
-					.attr("class", "weightLabel")
-					.on("mousemove", (function(closureValue) {
-						return function() {
-							var htmlString =
-								"<b>" + weightDescriptions[closureValue] + "</b>" +
-								"<hr>" +
-								countPerWeightClass[closureValue] + " fighters";
-							
+						})(wClass))
+						.text(wClass)
+						.attr("class", "weightLabel")
+						.on("mousemove", (function(closureValue) {
+							return function() {
+								var htmlString =
+									"<b>" + weightDescriptions[closureValue] + "</b>" +
+									"<hr>" +
+									countPerWeightClass[closureValue] + " fighters";
+								
+								tooltip.transition()
+									.duration(100)
+									.style("opacity", 1);
+
+								tooltip.html(htmlString)
+									.style("left", (d3.event.pageX) + "px")
+									.style("top", (d3.event.pageY + 30) + "px")
+									.style("transform", "translate(" +
+										   (-(getToolTipWidth() / 2) + 6) + "px, 0px)");
+							}
+						})(wClass))
+						.on("mouseover", (function(closureValue) {
+							return function() {
+								d3.selectAll(".node circle")
+									.transition()
+									.duration(100)
+									.style("stroke", function(d) {
+										if(d.wClass === closureValue) {
+											return "#000000"; 
+										}
+										else {
+											return "#FFFFFF";
+										}
+									})
+
+								d3.selectAll(".link line")
+									.transition()
+									.duration(100)
+									.style("stroke", function(d) {
+										if(d.source.wClass === closureValue && d.target.wClass === closureValue ||
+										   d.source.id == selectedFighterId && d.target.wClass === closureValue ||
+										   d.target.id == selectedFighterId && d.source.wClass === closureValue) {
+											return "#000000";
+										}
+										else {
+											return defaultLinkStroke;
+										}
+									})
+
+								d3.selectAll(".fightDot")
+									.transition()
+									.duration(100)
+									.style("stroke", function(d) {
+										if(d.opponentWClass === closureValue) {
+											return "#000000";
+										}
+										
+										return d.defaultStroke;
+									})
+							}
+						})(wClass))
+						.on("mouseout", function() {
 							tooltip.transition()
 								.duration(100)
-								.style("opacity", 1);
+								.style("opacity", 0);
 
-							tooltip.html(htmlString)
-								.style("left", (d3.event.pageX) + "px")
-								.style("top", (d3.event.pageY + 30) + "px")
-								.style("transform", "translate(" +
-									   (-(getToolTipWidth() / 2) + 6) + "px, 0px)");
-						}
-					})(wClass))
-					.on("mouseover", (function(closureValue) {
-						return function() {
 							d3.selectAll(".node circle")
 								.transition()
 								.duration(100)
-								.style("stroke", function(d) {
-									if(d.wClass === closureValue) {
-										return "#000000"; 
-									}
-									else {
-										return "#FFFFFF";
-									}
-								})
+								.style("stroke", "#FFFFFF")
 
 							d3.selectAll(".link line")
 								.transition()
 								.duration(100)
-								.style("stroke", function(d) {
-									if(d.source.wClass === closureValue && d.target.wClass === closureValue ||
-									   d.source.id == selectedFighterId && d.target.wClass === closureValue ||
-									   d.target.id == selectedFighterId && d.source.wClass === closureValue) {
-										return "#000000";
-									}
-									else {
-										return defaultLinkStroke;
-									}
-								})
+								.style("stroke", defaultLinkStroke)
 
 							d3.selectAll(".fightDot")
 								.transition()
 								.duration(100)
 								.style("stroke", function(d) {
-									if(d.opponentWClass === closureValue) {
-										return "#000000";
-									}
-									
 									return d.defaultStroke;
 								})
-						}
-					})(wClass))
-					.on("mouseout", function() {
-						tooltip.transition()
-							.duration(100)
-							.style("opacity", 0);
+						})
+						.on("click", (function(closureValue) {
+							return function() {
+								// toggle
+								selectedWeightClasses[closureValue] = !selectedWeightClasses[closureValue];
 
-						d3.selectAll(".node circle")
-							.transition()
-							.duration(100)
-							.style("stroke", "#FFFFFF")
+								createInfoViz(getSelectedWeightClasses(), minFightCount)
+							}
+						})(wClass));
+				}
 
-						d3.selectAll(".link line")
-							.transition()
-							.duration(100)
-							.style("stroke", defaultLinkStroke)
-
-						d3.selectAll(".fightDot")
-							.transition()
-							.duration(100)
-							.style("stroke", function(d) {
-								return d.defaultStroke;
-							})
-					})
-					.on("click", (function(closureValue) {
-						return function() {
-							// toggle
-							selectedWeightClasses[closureValue] = !selectedWeightClasses[closureValue];
-
-							createInfoViz(getSelectedWeightClasses(), minFightCount)
-						}
-					})(wClass));
-			}
+				hideSpinner();
+			}, 100);
 		}
 
-			createInfoViz(getSelectedWeightClasses(), minFightCount);
+		createInfoViz(getSelectedWeightClasses(), minFightCount);
 	});
 });
 
@@ -1843,4 +1831,26 @@ document.getElementById("searchSubmit").addEventListener("click", function() {
 
 		document.getElementById("plus").disabled = false;
 	});
+}
+
+////////////////
+//// Initialize spinner
+////////////////
+{
+	var dims = document.getElementById("spinner").getBoundingClientRect();
+	
+	d3.select("#spinner")
+		.style("left", (window.innerWidth - dims.width) / 2 + "px")
+		.style("top", (window.height - dims.height) / 2 + "px")
+		.style("visibility", "visible")
+}
+
+function showSpinner() {
+	d3.select("#spinner")
+		.style("visibility", "visible")
+}
+
+function hideSpinner() {
+	d3.select("#spinner")
+		.style("visibility", "hidden")
 }
