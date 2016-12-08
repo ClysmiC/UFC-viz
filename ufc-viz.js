@@ -502,6 +502,9 @@ function fighterClicked(fighter) {
     // make all non-selected stuff invisible
     d3.selectAll(".node circle")
         .style("opacity", function(d) {
+			if(d.name == "Matt Hughes") {
+				var foo = 3;
+			}
             if(fighter.id === d.id) {
                 return 1;
             }
@@ -995,16 +998,12 @@ function fighterClicked(fighter) {
                     // restore opacity of other fighters
                     d3.selectAll(".node circle")
                         .filter(".selected")
-                        .transition()
-                        .duration(100)
                         .style("opacity", 1)
                         .style("stroke", "#FFFFFF")
 
                     // restore opacity of other links
                     d3.selectAll(".link line")
                         .filter(".selected")
-                        .transition()
-                        .duration(100)
                         .style("opacity", defaultLinkOpacity)
                         .style("stroke", defaultLinkStroke)
                 }
